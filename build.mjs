@@ -14,9 +14,12 @@ if (existsSync('art')) execFileSync('python3', ['tools/build_art.py', 'build/min
 const images = existsSync('build/minigame/images')
   ? readdirSync('build/minigame/images').filter((f) => f.endsWith('.png')).map((f) => f.slice(0, -4))
   : [];
+// 合成音效（需要 python3 + numpy）
+execFileSync('python3', ['tools/make_sfx.py', 'build/minigame/audio'], { stdio: 'inherit' });
+const sounds = readdirSync('build/minigame/audio').filter((f) => f.endsWith('.wav')).map((f) => f.slice(0, -4));
 
 await build({
-  define: { __IMAGES__: JSON.stringify(images) },
+  define: { __IMAGES__: JSON.stringify(images), __SOUNDS__: JSON.stringify(sounds) },
   entryPoints: ['src/main.ts'],
   bundle: true,
   format: 'iife',
@@ -29,6 +32,7 @@ await build({
 cpSync('minigame', 'build/minigame', { recursive: true });
 cpSync('build/minigame/game.js', 'build/web/game.js');
 if (existsSync('build/minigame/images')) cpSync('build/minigame/images', 'build/web/images', { recursive: true });
+cpSync('build/minigame/audio', 'build/web/audio', { recursive: true });
 cpSync('web/index.html', 'build/web/index.html');
 execFileSync('python3', ['tools/make_single_html.py', 'build/web', 'build/qunfang-ranch.html'], { stdio: 'inherit' });
 console.log('done: build/minigame, build/web');

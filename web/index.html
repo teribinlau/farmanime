@@ -47,6 +47,22 @@ canvas{display:block;touch-action:none;-webkit-user-select:none;user-select:none
         fn({ touches: [t], changedTouches: [t] });
       });
     },
+    // 音效：手机浏览器要在第一次触摸后才允许出声
+    createInnerAudioContext: function () {
+      var a = new Audio(), inl = window.__INLINE_SOUNDS || {};
+      a.preload = 'auto';
+      return {
+        set src(v) { var k = String(v).replace(/^audio\//, '').replace(/\.wav$/, ''); a.src = inl[k] || v; },
+        get src() { return a.src; },
+        play: function () { var p = a.play(); if (p && p.catch) p.catch(function () {}); },
+        stop: function () { a.pause(); try { a.currentTime = 0; } catch (e) {} },
+        seek: function (t) { try { a.currentTime = t; } catch (e) {} },
+      };
+    },
+    vibrateShort: function (o) { if (navigator.vibrate) navigator.vibrate(o && o.type === 'medium' ? 25 : 12); },
+    shareAppMessage: navigator.share ? function (o) {
+      navigator.share({ title: '群芳牧场', text: o.title }).catch(function () {});
+    } : undefined,
     getStorageSync: function (k) { try { return JSON.parse(localStorage.getItem(k)) || ''; } catch (e) { return ''; } },
     setStorageSync: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
   };

@@ -24,8 +24,7 @@ const out = path.resolve('test/shots'); fs.mkdirSync(out, { recursive: true });
   };
   const loaded = await page.evaluate(() => Object.keys(window.__INLINE_IMAGES).length);
   await shot('01_title');
-  // 标题页只有一个按钮
-  await tapBtn('true');
+  await tapBtn("b.label === '开始经营'");
   await page.waitForTimeout(300);
   await shot('02_play');
   const mode = () => page.evaluate(() => window.__game.mode);
@@ -65,16 +64,44 @@ const out = path.resolve('test/shots'); fs.mkdirSync(out, { recursive: true });
     if (!firstPlace) { await page.waitForTimeout(200); await shot('03_placed'); firstPlace = true; }
     // 真实点击「结束今天」
     await page.waitForTimeout(950);
-    const ok = await tapBtn("b.y > 700 && b.w > 300");
+    const ok = await tapBtn("b.label === '🌙 结束今天'");
     if (!ok) await page.evaluate(() => window.__game.endDay());
     await page.waitForTimeout(150);
   }
   await page.waitForTimeout(1000);
   const st = await page.evaluate(() => ({ mode: window.__game.mode, weeks: window.__game.weeksSurvived, relics: window.__game.relics.length }));
   await shot('06_end_' + st.mode);
+  // 通关后试一下无尽模式：招一位伙伴，再撑几周直到失败
+  let endless = null;
+  if (st.mode === 'win') {
+    await tapBtn("b.label === '继续挑战（无尽模式）'");
+    const m1 = await mode();
+    if (m1 === 'relic') await page.evaluate(() => window.__game.chooseRelic(window.__game.relicChoices[0]));
+    let g2 = 0;
+    while ((await mode()) !== 'over' && g2++ < 80) {
+      await page.evaluate(() => {
+        const g = window.__game;
+        if (g.mode === 'rent') g.payRent();
+        else if (g.mode === 'relic') g.chooseRelic(g.relicChoices[0]);
+        else if (g.mode === 'play') { g.choices = []; g.endDay(); }
+      });
+    }
+    await page.waitForTimeout(1200);
+    await shot('07_endless_over');
+    endless = await page.evaluate(() => ({ mode: window.__game.mode, weeks: window.__game.weeksSurvived, best: window.__game.best, endless: window.__game.endless }));
+  }
   // 再来一局 -> 回到游戏
-  await tapBtn("b.h === 48 && b.w < 330");
+  await tapBtn("b.label === '再来一局'");
   const again = await mode();
-  console.log(JSON.stringify({ images: loaded, final: st, againMode: again, errors }));
+  // 存档：玩一天后刷新页面，标题页应出现「继续上局」并能恢复
+  await page.evaluate(() => { window.__game.choices = []; });
+  await tapBtn("b.label === '🌙 结束今天'");
+  const before = await page.evaluate(() => ({ day: window.__game.day, coins: window.__game.coins }));
+  await page.reload(); await page.waitForTimeout(1500);
+  await shot('08_title_continue');
+  const hasCont = await tapBtn("b.label === '继续上局'");
+  const after = await page.evaluate(() => ({ mode: window.__game.mode, day: window.__game.day, coins: window.__game.coins }));
+  const resume = { hasCont, ok: hasCont && after.mode === 'play' && after.day === before.day && after.coins === before.coins };
+  console.log(JSON.stringify({ images: loaded, final: st, endless, againMode: again, resume, errors }));
   await browser.close();
 })();

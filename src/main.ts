@@ -9,6 +9,8 @@ declare const __IMAGES__: string[];
 
 const GAME_TITLE = '群芳牧场';
 const STORAGE_KEY = 'qunfang_best';
+const RUN_KEY = 'qunfang_run';
+const MUTE_KEY = 'qunfang_mute';
 const FONT = '"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif';
 
 // ---------- 平台与画布 ----------
@@ -58,16 +60,62 @@ function loadImages() {
 }
 function img(key: string) { return images[key] || null; }
 
+// ---------- 音效与震动 ----------
+/** 打包时由 build.mjs 写入：audio/ 里实际存在的音效 */
+declare const __SOUNDS__: string[];
+const sounds: Record<string, any> = {};
+let muted = false;
+try { muted = !!wx.getStorageSync(MUTE_KEY); } catch (e) { /* ignore */ }
+function loadSounds() {
+  if (typeof __SOUNDS__ === 'undefined' || !wx.createInnerAudioContext) return;
+  __SOUNDS__.forEach((k) => {
+    try {
+      const a = wx.createInnerAudioContext();
+      a.src = 'audio/' + k + '.wav';
+      if ('obeyMuteSwitch' in a) a.obeyMuteSwitch = true;
+      sounds[k] = a;
+    } catch (e) { /* ignore */ }
+  });
+}
+function sfx(k: string) {
+  if (muted) return;
+  const a = sounds[k];
+  if (!a) return;
+  try { a.stop(); a.seek && a.seek(0); a.play(); } catch (e) { /* ignore */ }
+}
+function buzz(heavy = false) {
+  if (muted) return;
+  try { wx.vibrateShort && wx.vibrateShort({ type: heavy ? 'medium' : 'light' }); } catch (e) { /* ignore */ }
+}
+function toggleMute() {
+  muted = !muted;
+  try { wx.setStorageSync(MUTE_KEY, muted ? 1 : 0); } catch (e) { /* ignore */ }
+  if (!muted) sfx('tap');
+}
+function muteButton(x: number, y: number) {
+  text(muted ? '🔇' : '🔊', x, y, 16, '#000', 'center');
+  hit(x - 18, y - 16, 36, 32, toggleMute);
+}
+
+// ---------- 存档 ----------
+function saveRun() {
+  try { wx.setStorageSync(RUN_KEY, game.save()); } catch (e) { /* ignore */ }
+}
+function savedRun(): string {
+  try { return String(wx.getStorageSync(RUN_KEY) || ''); } catch (e) { return ''; }
+}
+
 // ---------- 状态 ----------
 const game = new RanchGame();
 try { game.best = Number(wx.getStorageSync(STORAGE_KEY)) || 0; } catch (e) { /* ignore */ }
 
 interface Float { x: number; y: number; text: string; color: string; t: number; }
 let floats: Float[] = [];
-interface Btn { x: number; y: number; w: number; h: number; onTap: () => void; }
+interface Btn { x: number; y: number; w: number; h: number; onTap: () => void; label?: string; }
 let buttons: Btn[] = [];
 let waitUntil = 0;
 let clock = 0;
+const popAt: Record<number, number> = {};
 
 // ---------- 布局 ----------
 const PAD = 12;
@@ -122,11 +170,11 @@ function wrap(s: string, x: number, y: number, maxW: number, size: number, color
   lines.forEach((l, k) => text(l, x, y + k * lineH, size, color, align));
   return lines.length;
 }
-function hit(x: number, y: number, w: number, h: number, onTap: () => void) { buttons.push({ x, y, w, h, onTap }); }
+function hit(x: number, y: number, w: number, h: number, onTap: () => void, label?: string) { buttons.push({ x, y, w, h, onTap, label }); }
 function button(label: string, x: number, y: number, w: number, h: number, onTap: () => void, color = '#ff8fb1', enabled = true, size = 17) {
   fillRR(x, y, w, h, h / 2, enabled ? color : '#cfc8d6');
   text(label, x + w / 2, y + h / 2 + 1, size, '#fff', 'center', true);
-  if (enabled) hit(x, y, w, h, onTap);
+  if (enabled) hit(x, y, w, h, onTap, label);
 }
 /** 等比画进框里；bottom=true 时脚底贴住框底（立绘用） */
 function drawContain(im: any, cx: number, cy: number, bw: number, bh: number, bottom = false) {
@@ -177,7 +225,10 @@ function drawBackground() {
 function drawHUD() {
   const y = SAFE_TOP;
   fillRR(PAD, y, W - PAD * 2, HUD_H - 6, 14, 'rgba(255,255,255,0.86)');
-  text('第' + game.week + '周 · 第' + Math.min(game.day, DAYS_PER_WEEK) + '天', PAD + 12, y + 17, 16, '#5a4a6b', 'left', true);
+  const head = '第' + game.week + '周 · 第' + Math.min(game.day, DAYS_PER_WEEK) + '天' + (game.endless ? ' · 无尽' : '');
+  text(head, PAD + 12, y + 17, 16, '#5a4a6b', 'left', true);
+  ctx.font = 'bold 16px ' + FONT;
+  muteButton(PAD + 12 + ctx.measureText(head).width + 20, y + 17);
   text('🌾 ' + game.coins, W - PAD - 12, y + 17, 18, '#d08a00', 'right', true);
   const left = DAYS_PER_WEEK - Math.min(game.day, DAYS_PER_WEEK) + 1;
   const rent = game.rentOf();
@@ -214,7 +265,9 @@ function drawBoard() {
       ctx.lineWidth = 3; ctx.strokeStyle = '#ff5f9e'; ctx.stroke();
     }
     if (cell.c) {
-      icon(cell.c.type, CREATURES[cell.c.type].icon, x + CELL / 2, y + CELL / 2 + 2, Math.floor(CELL * 0.48), CELL * 0.82);
+      const pt = clock - (popAt[i] || -9);
+      const k = pt < 0.35 ? popScale(pt / 0.35) : 1;
+      icon(cell.c.type, CREATURES[cell.c.type].icon, x + CELL / 2, y + CELL / 2 + 2 + (1 - k) * 6, Math.floor(CELL * 0.48 * k), CELL * 0.82 * k);
       if (cell.c.bonus > 0) text('+' + cell.c.bonus, x + 6, y + CELL - 11, 11, '#7a3cff', 'left', true);
       if (cell.c.last !== null) {
         const bw = 24;
@@ -225,6 +278,9 @@ function drawBoard() {
     hit(x, y, CELL, CELL, () => game.tapCell(i));
   });
 }
+
+/** 新放下的动物弹一下：0→1 时略微超出再回落 */
+function popScale(t: number) { const c = 1.7; const u = t - 1; return Math.max(0.05, 1 + (c + 1) * u * u * u + c * u * u); }
 
 function drawInfo() {
   fillRR(PAD, INFO_Y, W - PAD * 2, INFO_H, 12, 'rgba(255,255,255,0.86)');
@@ -287,8 +343,8 @@ function drawRent() {
   if (portrait) drawContain(portrait, W / 2, boxY + 30 - ph / 2, W, ph, true);
   else text(lord.icon, W / 2, boxY - 90, 90, '#000', 'center');
   fillRR(PAD, boxY, W - PAD * 2, boxH, 18, 'rgba(255,250,245,0.97)');
-  fillRR(PAD + 14, boxY - 16, 116, 32, 16, game.week === game.weeks ? '#c0392b' : '#8f7cff');
-  text((game.week === game.weeks ? '最终关 · ' : '') + lord.name, PAD + 72, boxY, 16, '#fff', 'center', true);
+  fillRR(PAD + 14, boxY - 16, 116, 32, 16, game.week === game.weeks && !game.endless ? '#c0392b' : '#8f7cff');
+  text((game.week === game.weeks && !game.endless ? '最终关 · ' : '') + lord.name, PAD + 72, boxY, 16, '#fff', 'center', true);
   wrap('「' + lord.line + '」', PAD + 18, boxY + 34, W - PAD * 2 - 36, 15, '#5a4a6b', 21, 2);
   text('第' + game.week + '周军粮：' + rent + ' 粮草', PAD + 18, boxY + 88, 14, '#5a4a6b');
   text('你现在有：' + game.coins + ' 粮草', PAD + 18, boxY + 110, 14, ok ? '#4c9a5b' : '#d0566d', 'left', true);
@@ -328,17 +384,36 @@ function drawRelic() {
 
 function drawEnd(win: boolean) {
   dim(0.55);
-  const ph = 300;
+  const ph = 330;
   const py = (H - ph) / 2 + 40;
   const who = win ? img('heroine') : img(game.lord.art);
   if (who) drawContain(who, W / 2, py - 90, W * 0.6, 220, true);
   fillRR(24, py, W - 48, ph - 40, 20, '#fffaf5');
-  text(win ? '乱世之中，你的牧场成了世外桃源！' : '粮草不够，牧场被' + game.lord.name + '收走了……', W / 2, py + 36, 16, '#5a4a6b', 'center', true);
+  const title = win ? '乱世之中，你的牧场成了世外桃源！'
+    : game.endless ? '无尽挑战结束，撑过了 ' + game.weeksSurvived + ' 周！'
+    : '粮草不够，牧场被' + game.lord.name + '收走了……';
+  text(title, W / 2, py + 36, 16, '#5a4a6b', 'center', true);
   text('撑过 ' + game.weeksSurvived + ' 周 · 伙伴 ' + game.relics.length + ' 位', W / 2, py + 70, 14, '#8a7a9b', 'center');
   text('累计收获 ' + game.total + ' 粮草 · 最好成绩 ' + game.best + ' 周', W / 2, py + 94, 13, '#a08bb5', 'center');
   let ax = W / 2 - (game.relics.length - 1) * 13;
   game.relics.forEach((id) => { avatar(RELICS[id].art, RELICS[id].icon, ax, py + 128, 11); ax += 26; });
-  button('再来一局', 54, py + ph - 110, W - 108, 48, () => game.newGame());
+  const bw = W - 108;
+  let by = py + 158;
+  if (win) {
+    button('继续挑战（无尽模式）', 54, by, bw, 46, () => game.continueEndless(), '#8f7cff');
+    by += 56;
+  }
+  const canShare = !!wx.shareAppMessage;
+  const half = canShare ? (bw - 10) / 2 : bw;
+  button('再来一局', 54, by, half, 46, () => game.newGame(), win ? '#ffb3c9' : '#ff8fb1');
+  if (canShare) button('分享战绩', 54 + half + 10, by, half, 46, () => shareResult(), '#f5b544');
+}
+
+function shareResult() {
+  const t = game.mode === 'win'
+    ? '我在' + GAME_TITLE + '撑过了全部 8 周，牧场成了世外桃源！你也来试试？'
+    : '我在' + GAME_TITLE + '撑过了 ' + game.weeksSurvived + ' 周，你能坚持多久？';
+  try { wx.shareAppMessage({ title: t }); } catch (e) { /* ignore */ }
 }
 
 function drawTitle() {
@@ -366,7 +441,15 @@ function drawTitle() {
     '交完军粮招一位伙伴，撑过8周即通关',
   ].forEach((l, k) => text('· ' + l, W / 2, ty + 72 + k * 24, 13, '#5a4a6b', 'center'));
   if (game.best) text('最好成绩：撑过 ' + game.best + ' 周', W / 2, ty + 172, 13, '#a08bb5', 'center');
-  button('开始经营', W / 2 - 100, Math.min(H - SAFE_BOTTOM - 70, ty + 192), 200, 52, () => game.newGame(), '#ff8fb1', true, 19);
+  const run = savedRun();
+  const by = Math.min(H - SAFE_BOTTOM - (run ? 128 : 70), ty + 192);
+  if (run) {
+    button('继续上局', W / 2 - 100, by, 200, 52, () => { if (!game.load(run)) game.newGame(); }, '#ff8fb1', true, 19);
+    button('重新开始', W / 2 - 100, by + 62, 200, 44, () => game.newGame(), '#c3b2d6', true, 16);
+  } else {
+    button('开始经营', W / 2 - 100, by, 200, 52, () => game.newGame(), '#ff8fb1', true, 19);
+  }
+  muteButton(W - PAD - 18, SAFE_TOP + 10);
 }
 
 function playFx() {
@@ -415,7 +498,29 @@ function frame(ts?: number) {
 }
 
 function endDay() {
+  sfx('night');
   if (game.endDay()) waitUntil = clock + 0.9;
+  saveRun();
+}
+
+/** 根据一次点击前后的变化放音效、震动和弹出动画 */
+function feedback(before: string, coins: number, cells: string[]) {
+  const m = game.mode;
+  if (m !== before) {
+    if (before === 'rent') { if (m === 'relic' || m === 'play') { sfx('pay'); buzz(true); } else if (m === 'win') { sfx('win'); buzz(true); } else { sfx('fail'); buzz(true); } return; }
+    if (before === 'relic' || (before === 'win' && m === 'relic')) { sfx('recruit'); return; }
+    sfx('tap'); return;
+  }
+  let changed = false;
+  game.board.forEach((c, i) => {
+    if (JSON.stringify(c) === cells[i]) return;
+    changed = true;
+    const old = cells[i] ? JSON.parse(cells[i]) : null;
+    if (c.c && (!old || !old.c || old.c.id !== c.c.id)) popAt[i] = clock;
+  });
+  if (changed) { sfx('place'); buzz(); }
+  if (game.coins > coins) sfx('coin');
+  else if (!changed) sfx('tap');
 }
 
 wx.onTouchStart((e: any) => {
@@ -425,11 +530,14 @@ wx.onTouchStart((e: any) => {
   for (let k = buttons.length - 1; k >= 0; k--) {
     const b = buttons[k];
     if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
-      const before = game.mode;
+      const before = game.mode, coins = game.coins;
+      const cells = game.board.map((c) => JSON.stringify(c));
       b.onTap();
+      feedback(before, coins, cells);
       if ((game.mode === 'over' || game.mode === 'win') && before !== game.mode) {
         try { wx.setStorageSync(STORAGE_KEY, game.best); } catch (e) { /* ignore */ }
       }
+      saveRun();
       return;
     }
   }
@@ -441,7 +549,10 @@ try {
   if (wx.onShareAppMessage) wx.onShareAppMessage(() => ({ title: '乱世之中，来' + GAME_TITLE + '和三国美少女们一起放牧吧！' }));
 } catch (e) { /* ignore */ }
 
+try { if (wx.onHide) wx.onHide(saveRun); } catch (e) { /* ignore */ }
+
 loadImages();
+loadSounds();
 requestAnimationFrame(frame);
 
 // 方便浏览器里调试

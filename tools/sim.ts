@@ -2,10 +2,11 @@
 // naive = 随手摆；greedy = 每步选让「今晚预计收入」最高的放法
 import { RanchGame } from '../src/core/RanchGame';
 
-function play(smart: boolean) {
+function play(smart: boolean, endless = false) {
   const g = new RanchGame(); g.newGame();
   let guard = 0;
-  while (g.mode !== 'over' && g.mode !== 'win' && guard++ < 500) {
+  while (g.mode !== 'over' && (g.mode !== 'win' || endless) && guard++ < 2000) {
+    if (g.mode === 'win') { g.continueEndless(); continue; }
     if (g.mode === 'rent') { g.payRent(); continue; }
     if (g.mode === 'relic') { g.chooseRelic(g.relicChoices[0]); continue; }
     while (g.choices.length) {
@@ -33,7 +34,7 @@ function play(smart: boolean) {
     }
     g.endDay();
   }
-  return g.weeksSurvived;
+  return g.mode === 'over' ? g.weeksSurvived : g.week;
 }
 
 for (const smart of [false, true]) {
@@ -41,3 +42,7 @@ for (const smart of [false, true]) {
   for (let n = 0; n < 150; n++) { const w = play(smart); hist[w] = (hist[w] || 0) + 1; }
   console.log(smart ? 'greedy' : 'naive', '撑过的周数分布', JSON.stringify(hist));
 }
+
+const hist: Record<number, number> = {};
+for (let n = 0; n < 150; n++) { const w = play(true, true); hist[w] = (hist[w] || 0) + 1; }
+console.log('greedy+无尽', '撑过的周数分布', JSON.stringify(hist));

@@ -24,6 +24,8 @@ export class RanchGame {
   relicChoices: RelicId[] = [];
   info = '';
   best = 0;
+  /** 通关后继续挑战（无尽模式） */
+  endless = false;
   fx: Fx[] = [];
   private nextId = 1;
 
@@ -41,10 +43,15 @@ export class RanchGame {
   }
 
   has(r: RelicId) { return this.relics.indexOf(r) >= 0; }
-  rentOf(week = this.week) { return Math.round(RENT[week - 1] * (this.has('favor') ? 0.85 : 1)); }
+  /** 某周的基础军粮：前8周查表，无尽模式每周×1.3 */
+  static baseRent(week: number) {
+    if (week <= RENT.length) return RENT[week - 1];
+    return Math.round(RENT[RENT.length - 1] * Math.pow(1.3, week - RENT.length) / 10) * 10;
+  }
+  rentOf(week = this.week) { return Math.round(RanchGame.baseRent(week) * (this.has('favor') ? 0.85 : 1)); }
   get weeks() { return RENT.length; }
   /** 本周来收军粮的诸侯 */
-  get lord() { return LORDS[Math.min(this.week, LORDS.length) - 1]; }
+  get lord() { return LORDS[(this.week - 1) % LORDS.length]; }
 
   neighbors(i: number): number[] {
     const x = i % COLS, y = Math.floor(i / COLS), r: number[] = [];
@@ -62,7 +69,7 @@ export class RanchGame {
   // ---------- 开局 ----------
   newGame() {
     this.week = 1; this.day = 1; this.coins = 5; this.total = 0;
-    this.relics = []; this.relicChoices = []; this.fx = [];
+    this.relics = []; this.relicChoices = []; this.fx = []; this.endless = false;
     this.board = [];
     for (let i = 0; i < COLS * ROWS; i++) this.board.push({ terrain: 'wild', c: null });
     [6, 7, 8, 11, 12, 13].forEach((i) => (this.board[i].terrain = 'grass'));
@@ -286,25 +293,61 @@ export class RanchGame {
     const rent = this.rentOf();
     if (this.coins < rent) { this.finish(false); return; }
     this.coins -= rent;
-    if (this.week >= RENT.length) { this.finish(true); return; }
+    if (this.week >= RENT.length && !this.endless) { this.finish(true); return; }
+    this.offerRelics();
+  }
+
+  /** 通关后继续挑战：军粮越来越多，看能撑多少周 */
+  continueEndless() {
+    if (this.mode !== 'win') return;
+    this.endless = true;
+    this.offerRelics();
+  }
+
+  private offerRelics() {
     const pool = (Object.keys(RELICS) as RelicId[]).filter((k) => !this.has(k));
     for (let i = pool.length - 1; i > 0; i--) { const j = this.rand(i + 1); [pool[i], pool[j]] = [pool[j], pool[i]]; }
     this.relicChoices = pool.slice(0, 3);
+    if (!this.relicChoices.length) { this.nextWeek('伙伴们都到齐了，新的一周开始了。'); return; }
     this.mode = 'relic';
   }
 
   chooseRelic(k: RelicId) {
     if (this.mode !== 'relic') return;
     this.relics.push(k);
+    this.nextWeek(RELICS[k].name + ' 加入了牧场！新的一周开始了。');
+  }
+
+  private nextWeek(info: string) {
     this.week++;
     this.day = 1;
-    this.info = RELICS[k].name + ' 加入了牧场！新的一周开始了。';
+    this.info = info;
     this.startDay();
     this.mode = 'play';
   }
 
   /** 撑过的周数 */
   get weeksSurvived() { return this.mode === 'win' ? RENT.length : this.week - 1; }
+
+  // ---------- 存档 ----------
+  /** 进行中的一局存成字符串（结束或在标题页时返回空串） */
+  save(): string {
+    if (this.mode === 'title' || this.mode === 'over' || this.mode === 'win') return '';
+    const { mode, week, day, coins, total, board, relics, choices, selected, picksLeft, rerollCost, relicChoices, info, endless, nextId } = this;
+    return JSON.stringify({ v: 1, mode, week, day, coins, total, board, relics, choices, selected, picksLeft, rerollCost, relicChoices, info, endless, nextId });
+  }
+  load(str: string): boolean {
+    try {
+      const d = JSON.parse(str);
+      if (!d || d.v !== 1 || !Array.isArray(d.board) || d.board.length !== COLS * ROWS) return false;
+      Object.assign(this, {
+        mode: d.mode, week: d.week, day: d.day, coins: d.coins, total: d.total, board: d.board, relics: d.relics,
+        choices: d.choices, selected: d.selected, picksLeft: d.picksLeft, rerollCost: d.rerollCost,
+        relicChoices: d.relicChoices, info: d.info, endless: !!d.endless, nextId: d.nextId, fx: [],
+      });
+      return true;
+    } catch (e) { return false; }
+  }
 
   private finish(win: boolean) {
     this.mode = win ? 'win' : 'over';

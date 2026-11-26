@@ -420,12 +420,18 @@ function drawBoard() {
     ctx.restore();
     rr(x + g + 0.5, y + g + 0.5, CELL - g * 2 - 1, CELL - g * 2 - 1, r);
     ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.stroke();
-    if (sel && game.canPlace(sel, cell)) {
+    if (sel && game.canPlace(sel, cell, true)) {
+      const repl = sel.kind === 'creature' && !!cell.c;
       ctx.save();
       ctx.shadowColor = 'rgba(255,220,140,' + pulse + ')'; ctx.shadowBlur = 10;
       rr(x + g + 1, y + g + 1, CELL - g * 2 - 2, CELL - g * 2 - 2, r);
-      ctx.lineWidth = 2.5; ctx.strokeStyle = 'rgba(255,226,150,' + (0.5 + pulse * 0.5) + ')'; ctx.stroke();
+      ctx.lineWidth = repl ? 1.5 : 2.5;
+      ctx.strokeStyle = repl ? 'rgba(255,150,160,' + (0.35 + pulse * 0.4) + ')' : 'rgba(255,226,150,' + (0.5 + pulse * 0.5) + ')';
+      if (repl) ctx.setLineDash([4, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
       ctx.restore();
+
     }
     if (cell.c) {
       // 地面阴影
@@ -448,6 +454,12 @@ function drawBoard() {
         ctx.lineWidth = 0.8; ctx.strokeStyle = 'rgba(232,204,133,0.8)'; ctx.stroke();
         text(s, x + CELL - 3 - bw / 2, y + CELL - 9.5, 10, C.goldHi, 'center', true);
       }
+    }
+    if (game.pendingReplace === i && sel) {
+      ctx.fillStyle = 'rgba(20,10,20,0.45)'; ctx.fillRect(x + 2, y + 2, CELL - 4, CELL - 4);
+      chamfer(x + 5, y + CELL / 2 - 11, CELL - 10, 22, 5); ctx.fillStyle = 'rgba(192,58,76,0.95)'; ctx.fill();
+      ctx.lineWidth = 1; ctx.strokeStyle = C.gold; ctx.stroke();
+      text('点击替换', x + CELL / 2, y + CELL / 2, 11, '#fff', 'center', true);
     }
     hit(x, y, CELL, CELL, () => game.tapCell(i));
   });
@@ -680,7 +692,7 @@ function drawTitle() {
 let showHelp = false;
 function drawHelp() {
   dim(0.6);
-  const w = W - 48, h = 250, x = 24, y = (H - h) / 2;
+  const w = W - 48, h = 330, x = 24, y = (H - h) / 2;
   panel(x, y, w, h, { c: 12 });
   goldText('玩法', W / 2, y + 30, 22);
   ornamentLine(W / 2, y + 30, w * 0.4, 44);
@@ -689,9 +701,11 @@ function drawHelp() {
     '动物看地形和周围邻居产出粮草',
     '每 7 天有诸侯来收军粮，交不起牧场就没了',
     '交完军粮招一位伙伴，撑过 8 周即通关',
+    '狐狸、夜枭、小云龙会吃邻居，牧羊犬旁边的动物不会被吃',
+    '格子满了也能把动物卡放到别的动物身上，替换掉它',
   ].forEach((l, k) => {
-    diamond(x + 24, y + 70 + k * 34, 3.5, C.gold);
-    wrap(l, x + 36, y + 70 + k * 34, w - 52, 13, C.cream, 18, 2);
+    diamond(x + 24, y + 70 + k * 40, 3.5, C.gold);
+    wrap(l, x + 36, y + 70 + k * 40, w - 52, 13, C.cream, 18, 2);
   });
   hit(0, 0, W, H, () => { showHelp = false; });
 }

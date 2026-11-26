@@ -115,17 +115,18 @@ const popAt: Record<number, number> = {};
 
 // ---------- 布局 ----------
 const PAD = 12;
-const TOP_H = 104;
+const TOP_H = 66;
 const BOARD_PAD = 8;
-const CELL = Math.floor(Math.min((W - PAD * 2 - BOARD_PAD * 2) / COLS, (H * 0.36) / ROWS));
-const BOARD_X = Math.floor((W - CELL * COLS) / 2);
-const BOARD_Y = SAFE_TOP + TOP_H + BOARD_PAD + 4;
-const INFO_Y = BOARD_Y + CELL * ROWS + BOARD_PAD + 10;
 const INFO_H = 62;
 const BTN_H = 52;
 const BTN_Y = H - SAFE_BOTTOM - BTN_H - 14;
-const CARDS_Y = INFO_Y + INFO_H + 14;
-const CARD_H = Math.max(110, Math.min(210, BTN_Y - 14 - CARDS_Y));
+// 卡牌改成弹窗后，棋盘可以占满宽度，并在剩余空间里尽量大
+const CELL = Math.floor(Math.min((W - PAD * 2 - BOARD_PAD * 2) / COLS,
+  (BTN_Y - 14 - INFO_H - 12 - (SAFE_TOP + TOP_H + 12) - BOARD_PAD * 2) / ROWS));
+const BOARD_X = Math.floor((W - CELL * COLS) / 2);
+const BOARD_Y = Math.floor(SAFE_TOP + TOP_H + BOARD_PAD + 12
+  + Math.max(0, (BTN_Y - 14 - INFO_H - 12 - (SAFE_TOP + TOP_H + 12) - BOARD_PAD * 2 - CELL * ROWS) / 2));
+const INFO_Y = BTN_Y - 14 - INFO_H;
 
 function cellCenter(i: number) {
   return { x: BOARD_X + (i % COLS) * CELL + CELL / 2, y: BOARD_Y + Math.floor(i / COLS) * CELL + CELL / 2 };
@@ -352,43 +353,35 @@ function muteButton(x: number, y: number) {
 }
 
 function drawHUD() {
-  const y = SAFE_TOP;
-  // 左：周数徽章
-  panel(PAD, y, 112, 56, { c: 10 });
-  goldText('第' + game.week + '周', PAD + 56, y + 21, 21);
+  const y = SAFE_TOP, h = TOP_H - 6;
+  panel(PAD, y, W - PAD * 2, h, { c: 10 });
+  // 左：周数和天数
+  goldText('第' + game.week + '周', PAD + 46, y + 20, 19);
   const day = Math.min(game.day, DAYS_PER_WEEK);
   for (let d = 1; d <= DAYS_PER_WEEK; d++) {
-    const cx = PAD + 56 + (d - 4) * 12;
-    diamond(cx, y + 43, d === day ? 4.5 : 3.2, d < day ? C.gold : d === day ? C.goldHi : 'rgba(232,204,133,0.28)');
+    diamond(PAD + 46 + (d - 4) * 10, y + 42, d === day ? 4 : 2.8, d < day ? C.gold : d === day ? C.goldHi : 'rgba(232,204,133,0.28)');
   }
-  if (game.endless) {
-    chamfer(PAD + 70, y - 6, 48, 16, 4); ctx.fillStyle = C.crimson; ctx.fill();
-    text('无尽', PAD + 94, y + 2, 10, '#fff', 'center', true);
-  }
+  if (game.endless) text('无尽', PAD + 46, y + h + 8, 10, '#ff8f9c', 'center', true);
   // 右：粮草
-  const cw = 132, cx0 = W - PAD - cw;
-  panel(cx0, y, cw, 56, { c: 10 });
-  text('🌾', cx0 + 24, y + 26, 22, '#000', 'center');
-  goldText(String(game.coins), cx0 + 46, y + 23, 24, 'left', FONT);
-  text('今晚 +' + game.previewIncome(), cx0 + 46, y + 44, 11, C.muted, 'left');
-  // 中：静音
-  muteButton(PAD + 112 + (cx0 - PAD - 112) / 2, y + 28);
-  // 第二行：诸侯与军粮进度
-  const ry = y + 64, rh = 34;
-  panel(PAD, ry, W - PAD * 2, rh, { c: 8, corners: false });
+  const rx = W - PAD - 104;
+  text('🌾', rx + 14, y + 21, 18, '#000', 'center');
+  goldText(String(game.coins), rx + 28, y + 21, 21, 'left', FONT);
+  text('今晚 +' + game.previewIncome(), rx + 28, y + 42, 10.5, C.muted, 'left');
+  // 中：诸侯与军粮进度
+  const mx = PAD + 92, mw = rx - mx - 8;
   const rent = game.rentOf(), lord = game.lord;
-  avatar(lord.art, lord.icon, PAD + 20, ry + rh / 2, 11, C.crimson);
+  avatar(lord.art, lord.icon, mx + 12, y + h / 2, 11, C.crimson);
   const left = DAYS_PER_WEEK - day + 1;
-  text(lord.name + ' · 军粮', PAD + 38, ry + rh / 2, 12, C.cream, 'left', true);
-  const bx = PAD + 112, bw = W - PAD * 2 - 112 - 64, bh = 10, by = ry + rh / 2 - bh / 2;
-  fillRR(bx, by, bw, bh, 5, 'rgba(0,0,0,0.5)');
+  text(lord.name + ' 收军粮', mx + 28, y + 17, 11, C.cream, 'left', true);
+  text('还剩' + left + '天', mx + mw, y + 17, 11, game.coins >= rent ? C.jade : '#ff8f9c', 'right', true);
+  const bx = mx + 28, bw = mw - 28, bh = 12, by = y + 32;
+  fillRR(bx, by, bw, bh, 6, 'rgba(0,0,0,0.5)');
   const ok = game.coins >= rent;
-  const f = Math.max(0.02, Math.min(1, game.coins / Math.max(1, rent)));
+  const f = Math.max(0.03, Math.min(1, game.coins / Math.max(1, rent)));
   const pg = ctx.createLinearGradient(bx, 0, bx + bw, 0);
   if (ok) { pg.addColorStop(0, '#3a9e82'); pg.addColorStop(1, '#7fe3c1'); } else { pg.addColorStop(0, '#8e2a3a'); pg.addColorStop(1, '#e0707e'); }
-  fillRR(bx, by, bw * f, bh, 5, pg as any);
+  fillRR(bx, by, bw * f, bh, 6, pg as any);
   text(game.coins + ' / ' + rent, bx + bw / 2, by + bh / 2 + 0.5, 9, '#fff', 'center', true);
-  text('还剩' + left + '天', W - PAD - 10, ry + rh / 2, 12, ok ? C.jade : '#ff8f9c', 'right', true);
 }
 
 function drawBoard() {
@@ -485,54 +478,93 @@ function drawInfo() {
   wrap(game.info, x + ar * 2 + 14, y + h / 2 - (lines - 1) * 10, w - ar * 2 - 26, 13.5, C.cream, 20, 2);
 }
 
-function drawCards() {
+/** 每天早上弹出的选卡窗：三张大卡居中，下方刷新 / 跳过 */
+let cardModal = true;
+let dayKey = '';
+function drawCardModal() {
   const n = game.choices.length;
-  if (!n) {
-    if (game.mode === 'play') {
-      ornamentLine(W / 2, CARDS_Y + CARD_H / 2 - 16, W * 0.32, 0);
-      shadowText('今天的卡已经选好了', W / 2, CARDS_Y + CARD_H / 2 + 4, 15, C.cream, 'center', true, SERIF);
-      text('点「结束今天」收获粮草', W / 2, CARDS_Y + CARD_H / 2 + 28, 12, C.muted, 'center');
-    }
-    return;
-  }
-  const gap = 8, rerollW = 50;
-  const cw = Math.floor((W - PAD * 2 - gap * n - rerollW) / n);
+  dim(0.62);
+  hit(0, 0, W, BTN_Y - 4, () => { cardModal = false; }, '收起');
+  const gap = 8;
+  const cw = Math.floor((W - PAD * 2 - gap * (n - 1)) / n);
+  const ch = Math.min(H * 0.52, 380);
+  const cy = Math.max(SAFE_TOP + TOP_H + 50, (H - ch) / 2 - 30);
+  goldText(game.picksLeft > 1 ? '今天还能选 ' + game.picksLeft + ' 张' : '选一张卡', W / 2, cy - 26, 24);
+  ornamentLine(W / 2, cy - 26, W * 0.46, 92);
   game.choices.forEach((card, k) => {
-    const picked = game.selected === k;
-    const x = PAD + k * (cw + gap), y = CARDS_Y - (picked ? 10 : 0);
+    const x = PAD + k * (cw + gap), y = cy;
     const info = cardInfo(card);
     const col = cardColor(card);
-    panel(x, y, cw, CARD_H, { c: 8, corners: false, glow: picked ? 'rgba(255,220,140,0.95)' : undefined, fill: 'rgba(24,20,44,0.92)' });
-    // 画面区：放射光晕
-    const ah = Math.max(CARD_H * 0.45, Math.min(CARD_H - 80, cw * 1.15));
-    ctx.save(); chamfer(x + 4, y + 4, cw - 8, ah, 6); ctx.clip();
-    const rg = ctx.createRadialGradient(x + cw / 2, y + 4 + ah * 0.55, 4, x + cw / 2, y + 4 + ah * 0.55, cw * 0.75);
-    rg.addColorStop(0, col); rg.addColorStop(1, 'rgba(20,16,36,1)');
-    ctx.globalAlpha = 0.55; ctx.fillStyle = rg; ctx.fillRect(x, y, cw, ah + 8); ctx.globalAlpha = 1;
-    icon(cardArtKey(card), info.icon || '⬛', x + cw / 2, y + 4 + ah / 2 + 2, 30, Math.min(cw - 8, ah - 6));
-    ctx.restore();
-    // 稀有度色条与标签
-    ctx.fillStyle = col; ctx.fillRect(x + 4, y + 4 + ah, cw - 8, 2);
-    chamfer(x + 4, y + 4, 34, 15, 4); ctx.fillStyle = 'rgba(10,8,20,0.75)'; ctx.fill();
-    text(info.tag, x + 21, y + 12, 9, col, 'center', true);
-    const ny = y + 4 + ah + 16;
-    text(info.name, x + cw / 2, ny, 14, picked ? C.goldHi : C.cream, 'center', true, SERIF);
-    wrap(info.desc, x + cw / 2, ny + 19, cw - 12, 10.5, C.muted, 14, Math.max(1, Math.floor((CARD_H - (ny - y) - 22) / 14)), 'center');
-    if (picked && card.kind === 'item' && ITEMS[card.type].target === 'none') {
-      chamfer(x + 8, y + CARD_H - 22, cw - 16, 16, 4); ctx.fillStyle = C.gold; ctx.fill();
-      text('再点一次使用', x + cw / 2, y + CARD_H - 14, 10, '#3b2410', 'center', true);
-    }
-    hit(x, y, cw, CARD_H, () => game.tapCard(k));
+    panel(x, y, cw, ch, { c: 10, corners: false, fill: 'rgba(24,20,44,0.96)' });
+    // 顶部名字条
+    chamfer(x + 4, y + 4, cw - 8, 30, 6);
+    const hg = ctx.createLinearGradient(0, y + 4, 0, y + 34);
+    hg.addColorStop(0, col); hg.addColorStop(1, 'rgba(0,0,0,0.35)');
+    ctx.fillStyle = hg; ctx.fill();
+    text(info.name, x + cw / 2, y + 20, 15, '#fff', 'center', true, SERIF);
+    // 画面
+    const ah = Math.min(ch * 0.36, cw * 1.05);
+    const rg = ctx.createRadialGradient(x + cw / 2, y + 38 + ah / 2, 4, x + cw / 2, y + 38 + ah / 2, cw * 0.6);
+    rg.addColorStop(0, 'rgba(255,255,255,0.18)'); rg.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = rg; ctx.fillRect(x, y + 38, cw, ah);
+    icon(cardArtKey(card), info.icon || '⬛', x + cw / 2, y + 38 + ah / 2, 40, Math.min(cw - 10, ah - 4));
+    // 标签 + 收益
+    chamfer(x + cw / 2 - 26, y + 40 + ah, 52, 17, 5); ctx.fillStyle = 'rgba(10,8,20,0.8)'; ctx.fill();
+    text(info.tag, x + cw / 2, y + 48.5 + ah, 10, col, 'center', true);
+    // 规则：大字，数字高亮
+    const ry = y + 68 + ah;
+    fillRR(x + 6, ry - 6, cw - 12, ch - (ry - y) - 2, 6, 'rgba(255,248,230,0.06)');
+    richWrap(info.desc, x + cw / 2, ry + 10, cw - 20, 13, 19, Math.max(2, Math.floor((ch - (ry - y) - 14) / 19)));
+    hit(x, y, cw, ch, () => pickCard(k), info.name);
   });
-  const rx = W - PAD - rerollW;
-  const can = game.canReroll();
-  panel(rx, CARDS_Y, rerollW, CARD_H, { c: 8, corners: false, fill: can ? 'rgba(52,44,92,0.92)' : 'rgba(30,28,40,0.85)' });
-  const cy = CARDS_Y + CARD_H / 2;
-  text('🔄', rx + rerollW / 2, cy - 22, 20, '#000', 'center');
-  text('刷', rx + rerollW / 2, cy + 4, 13, can ? C.cream : '#777', 'center', true, SERIF);
-  text('新', rx + rerollW / 2, cy + 20, 13, can ? C.cream : '#777', 'center', true, SERIF);
-  text('🌾' + game.rerollCost, rx + rerollW / 2, cy + 42, 10, can ? C.gold : '#777', 'center', true);
-  if (can) hit(rx, CARDS_Y, rerollW, CARD_H, () => game.reroll(), '刷新');
+  const by = cy + ch + 18, bw = (W - PAD * 2 - 12) / 2;
+  button('🔄 刷新 🌾' + game.rerollCost, PAD, by, bw, 46, () => game.reroll(), 'violet', game.canReroll(), 15);
+  button('跳过', PAD + bw + 12, by, bw, 46, () => { game.skipCards(); }, 'ghost', true, 15);
+  text('点卡牌选择，再点牧场格子放置；点空白处先看看牧场', W / 2, by + 66, 12, C.muted, 'center');
+}
+/** 把说明里的数字和关键词标成金色 */
+function richWrap(s: string, cx: number, y: number, maxW: number, size: number, lineH: number, maxLines: number) {
+  ctx.font = size + 'px ' + FONT;
+  const lines: string[] = [];
+  let line = '';
+  for (const ch of Array.from(s)) {
+    if (ctx.measureText(line + ch).width > maxW && line) { lines.push(line); line = ch; } else line += ch;
+  }
+  if (line) lines.push(line);
+  if (lines.length > maxLines) { lines.length = maxLines; lines[maxLines - 1] = lines[maxLines - 1].slice(0, -1) + '…'; }
+  const key = /[+＋-]?\d+%?|永久|水塘|草地|花田|森林|岩洞|吃掉|守护/g;
+  lines.forEach((l, k) => {
+    const w = ctx.measureText(l).width;
+    let x = cx - w / 2;
+    const yy = y + k * lineH;
+    let last = 0;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    l.replace(key, (m, idx: number) => {
+      const before = l.slice(last, idx);
+      ctx.font = size + 'px ' + FONT; ctx.fillStyle = C.cream; ctx.fillText(before, x, yy); x += ctx.measureText(before).width;
+      ctx.font = 'bold ' + size + 'px ' + FONT; ctx.fillStyle = /\d/.test(m) ? C.goldHi : '#9fe0c4'; ctx.fillText(m, x, yy); x += ctx.measureText(m).width;
+      last = idx + m.length;
+      return m;
+    });
+    const rest = l.slice(last);
+    ctx.font = size + 'px ' + FONT; ctx.fillStyle = C.cream; ctx.fillText(rest, x, yy);
+  });
+}
+function pickCard(k: number) {
+  const card = game.choices[k];
+  if (!card) return;
+  game.tapCard(k);
+  if (card.kind === 'item' && ITEMS[card.type].target === 'none') { game.tapCard(k); return; }
+  cardModal = false;
+}
+/** 选好卡、还没放下时，在底部显示「换一张」 */
+function drawPickBar() {
+  if (game.mode !== 'play' || !game.choices.length) return;
+  if (game.selected >= 0) {
+    button('换一张卡', W - PAD - 108, INFO_Y - 46, 108, 36, () => { game.deselect(); cardModal = true; }, 'ghost', true, 13);
+  } else if (!cardModal) {
+    button('查看今天的卡', W - PAD - 128, INFO_Y - 46, 128, 36, () => { cardModal = true; }, 'gold', true, 13);
+  }
 }
 
 function dim(alpha = 0.5) {
@@ -745,11 +777,15 @@ function frame(ts?: number) {
     drawTitle();
   } else {
     drawBackground();
+    const k = game.week + '-' + game.day;
+    if (k !== dayKey) { dayKey = k; cardModal = true; }
     drawHUD();
     drawBoard();
     drawInfo();
-    drawCards();
-    button('🌙 结束今天', PAD, BTN_Y, W - PAD * 2, BTN_H, endDay, game.choices.length ? 'violet' : 'gold', game.canEndDay() && clock >= waitUntil, 18);
+    drawPickBar();
+    muteButton(PAD + 18, BTN_Y + BTN_H / 2);
+    button('🌙 结束今天', PAD + 42, BTN_Y, W - PAD * 2 - 42, BTN_H, endDay, game.choices.length ? 'violet' : 'gold', game.canEndDay() && clock >= waitUntil, 18);
+    if (game.mode === 'play' && cardModal && game.choices.length && game.selected < 0 && clock >= waitUntil) drawCardModal();
     drawFloats(dt);
     if (clock >= waitUntil) {
       if (game.mode === 'rent') drawRent();
@@ -793,10 +829,11 @@ wx.onTouchStart((e: any) => {
   for (let k = buttons.length - 1; k >= 0; k--) {
     const b = buttons[k];
     if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
-      const before = game.mode, coins = game.coins;
+      const before = game.mode, coins = game.coins, nChoices = game.choices.length;
       const cells = game.board.map((c) => JSON.stringify(c));
       b.onTap();
       feedback(before, coins, cells);
+      if (game.choices.length < nChoices && game.selected < 0) cardModal = true;
       if ((game.mode === 'over' || game.mode === 'win') && before !== game.mode) {
         try { wx.setStorageSync(STORAGE_KEY, game.best); } catch (e) { /* ignore */ }
       }
@@ -804,7 +841,7 @@ wx.onTouchStart((e: any) => {
       return;
     }
   }
-  if (game.mode === 'play' && game.selected >= 0) game.deselect();
+  if (game.mode === 'play' && game.selected >= 0) { game.deselect(); cardModal = true; }
 });
 
 try {

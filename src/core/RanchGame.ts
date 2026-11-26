@@ -216,6 +216,13 @@ export class RanchGame {
     this.fx.push({ cell, text: (n >= 0 ? '+' : '') + n, color: '#ffb300' });
   }
 
+  /** 今天不选卡了 */
+  skipCards() {
+    if (this.mode !== 'play' || !this.choices.length) return;
+    this.choices = []; this.selected = -1; this.pendingReplace = -1;
+    this.info = '今天不选卡了，点「结束今天」收获粮草。';
+  }
+
   canReroll() { return this.mode === 'play' && this.choices.length > 0 && this.coins >= this.rerollCost; }
   reroll() {
     if (!this.canReroll()) return;

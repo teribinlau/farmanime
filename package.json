@@ -1,0 +1,16 @@
+{
+  "name": "qunfang-ranch",
+  "version": "0.3.0",
+  "private": true,
+  "description": "群芳牧场：三国美少女牧场经营微信小游戏（原生 Canvas）",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "sim": "tsx tools/sim.ts"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0",
+    "tsx": "^4.23.0",
+    "typescript": "^5.6.0"
+  }
+}

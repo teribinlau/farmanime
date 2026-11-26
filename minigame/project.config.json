@@ -1,0 +1,8 @@
+{
+  "description": "群芳牧场",
+  "compileType": "game",
+  "appid": "touristappid",
+  "projectname": "qunfang-ranch",
+  "libVersion": "3.0.0",
+  "setting": { "es6": true, "minified": true, "urlCheck": false }
+}

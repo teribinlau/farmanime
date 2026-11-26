@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>群芳牧场 · 试玩</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#2b2233;overscroll-behavior:none}
+#wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+canvas{display:block;touch-action:none;-webkit-user-select:none;user-select:none}
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c"></canvas></div>
+<script>
+// 浏览器里模拟游戏用到的一小部分 wx API。宽屏（电脑）时按手机比例居中显示。
+(function () {
+  var cv = document.getElementById('c');
+  var vw = window.innerWidth, vh = window.innerHeight;
+  var w = vw, h = vh;
+  if (vw / vh > 0.62) { h = vh; w = Math.round(vh * 0.5); }
+  var first = true;
+  var safeTop = 0;
+  window.wx = {
+    getSystemInfoSync: function () {
+      return { windowWidth: w, windowHeight: h, pixelRatio: window.devicePixelRatio || 1,
+               safeArea: { top: safeTop, bottom: h } };
+    },
+    createCanvas: function () {
+      if (first) { first = false; cv.style.width = w + 'px'; cv.style.height = h + 'px'; return cv; }
+      return document.createElement('canvas');
+    },
+    createImage: function () {
+      var im = new Image(), inl = window.__INLINE_IMAGES;
+      if (!inl) return im;
+      var setSrc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src').set;
+      Object.defineProperty(im, 'src', { set: function (v) {
+        var k = String(v).replace(/^images\//, '').replace(/\.png$/, '');
+        setSrc.call(im, inl[k] || v);
+      }, get: function () { return im.currentSrc; } });
+      return im;
+    },
+    onTouchStart: function (fn) {
+      cv.addEventListener('pointerdown', function (e) {
+        var r = cv.getBoundingClientRect();
+        var t = { clientX: e.clientX - r.left, clientY: e.clientY - r.top };
+        fn({ touches: [t], changedTouches: [t] });
+      });
+    },
+    getStorageSync: function (k) { try { return JSON.parse(localStorage.getItem(k)) || ''; } catch (e) { return ''; } },
+    setStorageSync: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+  };
+})();
+</script>
+<script src="game.js"></script>
+</body>
+</html>

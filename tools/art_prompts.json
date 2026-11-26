@@ -1,0 +1,263 @@
+{
+  "style": "Original cute anime-style game asset for a cozy mobile ranch game set in a peaceful, whimsical Three Kingdoms era Chinese countryside. Soft cel shading, clean dark-brown outlines, pastel palette (sky blue, sakura pink, cream, mint green), gentle highlights, big round sparkly eyes, kawaii and warm. Single centered subject, three-quarter view, no text, no letters, no watermark, no frame, no border, no ground shadow, isolated on a fully transparent background. Consistent with a matching set of game icons.",
+  "assets": [
+    {
+      "key": "sheep",
+      "group": "动物",
+      "name": "云朵羊",
+      "prompt": "a fluffy little sheep whose wool looks like a soft white cloud, tiny pink cheeks, happy expression, chibi proportions, full body"
+    },
+    {
+      "key": "duck",
+      "group": "动物",
+      "name": "胖胖鸭",
+      "prompt": "a chubby round yellow-and-white duckling with a tiny blue ribbon, sitting contentedly, chibi proportions, full body"
+    },
+    {
+      "key": "chick",
+      "group": "动物",
+      "name": "布丁鸡",
+      "prompt": "a round chick shaped like a caramel custard pudding, pale yellow body with a caramel-brown top, holding a small egg, chibi proportions, full body"
+    },
+    {
+      "key": "bunny",
+      "group": "动物",
+      "name": "星星兔",
+      "prompt": "a small white bunny with a little golden star mark on its forehead and star-shaped tail, long floppy ears, chibi proportions, full body"
+    },
+    {
+      "key": "frog",
+      "group": "动物",
+      "name": "跳跳蛙",
+      "prompt": "a bouncy mint-green frog wearing a lily-pad hat, mid-hop, cheerful, chibi proportions, full body"
+    },
+    {
+      "key": "pig",
+      "group": "动物",
+      "name": "蘑菇猪",
+      "prompt": "a pink piglet wearing a red-and-white spotted mushroom cap as a hat, curious face, chibi proportions, full body"
+    },
+    {
+      "key": "dog",
+      "group": "动物",
+      "name": "牧羊犬",
+      "prompt": "a loyal fluffy herding puppy with cream and caramel fur, wearing a small blue scarf, proud pose, chibi proportions, full body"
+    },
+    {
+      "key": "bee",
+      "group": "动物",
+      "name": "蜜蜂群",
+      "prompt": "a trio of tiny round fuzzy bees flying together around a pink flower, cute, chibi proportions, full body"
+    },
+    {
+      "key": "fox",
+      "group": "动物",
+      "name": "小狐狸",
+      "prompt": "a mischievous small orange fox with a fluffy white-tipped tail and a sly grin, sitting, chibi proportions, full body"
+    },
+    {
+      "key": "deer",
+      "group": "动物",
+      "name": "月光鹿",
+      "prompt": "an elegant fawn with silvery-lavender fur, small antlers glowing softly with moonlight, crescent moon mark, chibi proportions, full body"
+    },
+    {
+      "key": "owl",
+      "group": "动物",
+      "name": "夜枭",
+      "prompt": "a round sleepy owl with indigo feathers sprinkled with tiny stars, big golden eyes, perched, chibi proportions, full body"
+    },
+    {
+      "key": "dragon",
+      "group": "动物",
+      "name": "小云龙",
+      "prompt": "a tiny baby sky dragon, pastel blue and white, with cloud-puff mane and little wings, playful, chibi proportions, full body"
+    },
+    {
+      "key": "tile_wild",
+      "group": "地形",
+      "name": "荒地",
+      "prompt": "a square top-down ground tile of dry sandy soil with a few pebbles, rounded corners, seamless flat game tile, no characters",
+      "square_tile": true
+    },
+    {
+      "key": "tile_grass",
+      "group": "地形",
+      "name": "草地",
+      "prompt": "a square top-down ground tile of lush soft green grass with tiny clovers, rounded corners, flat game tile, no characters",
+      "square_tile": true
+    },
+    {
+      "key": "tile_pond",
+      "group": "地形",
+      "name": "水塘",
+      "prompt": "a square top-down ground tile of a small clear blue pond with lily pads and sparkles, grassy rim, rounded corners, flat game tile, no characters",
+      "square_tile": true
+    },
+    {
+      "key": "tile_flower",
+      "group": "地形",
+      "name": "花田",
+      "prompt": "a square top-down ground tile of a pink and white flower field, rounded corners, flat game tile, no characters",
+      "square_tile": true
+    },
+    {
+      "key": "tile_forest",
+      "group": "地形",
+      "name": "森林",
+      "prompt": "a square top-down ground tile of mossy forest floor with small round trees at the edges, rounded corners, flat game tile, no characters",
+      "square_tile": true
+    },
+    {
+      "key": "tile_cave",
+      "group": "地形",
+      "name": "岩洞",
+      "prompt": "a square top-down ground tile of grey-brown rocks with a small cozy cave entrance and glowing crystals, rounded corners, flat game tile, no characters",
+      "square_tile": true
+    },
+    {
+      "key": "item_cookie",
+      "group": "道具",
+      "name": "云朵饼干",
+      "prompt": "a cloud-shaped sugar cookie with white icing and sprinkles, game item icon"
+    },
+    {
+      "key": "item_seed",
+      "group": "道具",
+      "name": "彩虹种子",
+      "prompt": "a small cloth pouch spilling rainbow-colored glowing seeds, game item icon"
+    },
+    {
+      "key": "item_water",
+      "group": "道具",
+      "name": "洒水壶",
+      "prompt": "a cute pastel blue watering can pouring sparkling water, game item icon"
+    },
+    {
+      "key": "item_broom",
+      "group": "道具",
+      "name": "小扫帚",
+      "prompt": "a small straw broom with a pink ribbon, game item icon"
+    },
+    {
+      "key": "item_bell",
+      "group": "道具",
+      "name": "招财铃",
+      "prompt": "a shiny golden bell with a red tassel and little coin sparkles, game item icon"
+    },
+    {
+      "key": "heroine",
+      "group": "角色",
+      "name": "小禾（女主）",
+      "prompt": "original character design, an anime girl rancher in a Three Kingdoms era countryside setting, about 16, short wavy chestnut hair with a sprout hair clip, big green eyes, straw hat with a pink ribbon, simple cream hanfu-style work clothes with rolled sleeves, holding a small wooden bucket, waving cheerfully, full body standing"
+    },
+    {
+      "key": "logo",
+      "group": "UI",
+      "name": "标题字底图",
+      "prompt": "a decorative fluffy cloud banner shape with a small floating island on top, empty space in the middle for a title, no text"
+    },
+    {
+      "key": "hero_zhaoyun",
+      "group": "伙伴",
+      "name": "赵云",
+      "prompt": "original character design (not based on any existing game or anime), a cute anime girl reimagining of the Three Kingdoms figure Zhao Yun: brave cheerful girl in white-and-silver light armor with a long ponytail, holding a silver spear, small white horse emblem, upper body portrait, friendly pose"
+    },
+    {
+      "key": "hero_zhugeliang",
+      "group": "伙伴",
+      "name": "诸葛亮",
+      "prompt": "original character design (not based on any existing game or anime), a cute anime girl reimagining of the Three Kingdoms figure Zhuge Liang: calm genius girl in flowing white-and-green scholar robes, holding a white feather fan, gentle knowing smile, upper body portrait, friendly pose"
+    },
+    {
+      "key": "hero_diaochan",
+      "group": "伙伴",
+      "name": "貂蝉",
+      "prompt": "original character design (not based on any existing game or anime), a cute anime girl reimagining of the Three Kingdoms figure Diao Chan: graceful elegant girl in pink-and-lavender hanfu with flowing sleeves and moon hair ornament, shy smile, upper body portrait, friendly pose"
+    },
+    {
+      "key": "hero_guanyu",
+      "group": "伙伴",
+      "name": "关羽",
+      "prompt": "original character design (not based on any existing game or anime), a cute anime girl reimagining of the Three Kingdoms figure Guan Yu: tall dignified girl with very long dark hair, green robe over light armor, holding a crescent glaive, serious but kind, upper body portrait, friendly pose"
+    },
+    {
+      "key": "hero_zhangfei",
+      "group": "伙伴",
+      "name": "张飞",
+      "prompt": "original character design (not based on any existing game or anime), a cute anime girl reimagining of the Three Kingdoms figure Zhang Fei: energetic tomboyish girl with messy short black hair, tiger-stripe armor accents, big grin, holding a snake spear and a meat skewer, upper body portrait, friendly pose"
+    },
+    {
+      "key": "hero_huangyueying",
+      "group": "伙伴",
+      "name": "黄月英",
+      "prompt": "original character design (not based on any existing game or anime), a cute anime girl reimagining of the Three Kingdoms figure Huang Yueying: inventor girl with goggles on her head, braided hair, work apron with tools, small wooden mechanical ox beside her, upper body portrait, friendly pose"
+    },
+    {
+      "key": "hero_sunshangxiang",
+      "group": "伙伴",
+      "name": "孙尚香",
+      "prompt": "original character design (not based on any existing game or anime), a cute anime girl reimagining of the Three Kingdoms figure Sun Shangxiang: sporty princess archer girl in red-and-gold outfit, holding a bow, confident wink, upper body portrait, friendly pose"
+    },
+    {
+      "key": "hero_xiaoqiao",
+      "group": "伙伴",
+      "name": "小乔",
+      "prompt": "original character design (not based on any existing game or anime), a cute anime girl reimagining of the Three Kingdoms figure Xiao Qiao: petite sweet girl in light blue hanfu with flower hairpins, holding a small bunny, upper body portrait, friendly pose"
+    },
+    {
+      "key": "hero_caiwenji",
+      "group": "伙伴",
+      "name": "蔡文姬",
+      "prompt": "original character design (not based on any existing game or anime), a cute anime girl reimagining of the Three Kingdoms figure Cai Wenji: gentle poet musician girl in fur-trimmed travel cloak, holding a horn flute (hujia), melancholic soft smile, upper body portrait, friendly pose"
+    },
+    {
+      "key": "lord_yuanshu",
+      "group": "诸侯",
+      "name": "袁术",
+      "prompt": "original character design (not based on any existing game or anime), a cute anime girl reimagining of the Three Kingdoms figure Yuan Shu: spoiled noble girl in gaudy gold robes holding a honey jar, pouting, upper body portrait, dramatic pose"
+    },
+    {
+      "key": "lord_liubiao",
+      "group": "诸侯",
+      "name": "刘表",
+      "prompt": "original character design (not based on any existing game or anime), a cute anime girl reimagining of the Three Kingdoms figure Liu Biao: relaxed scholarly lady in calm blue robes holding a scroll, polite smile, upper body portrait, dramatic pose"
+    },
+    {
+      "key": "lord_yuanshao",
+      "group": "诸侯",
+      "name": "袁绍",
+      "prompt": "original character design (not based on any existing game or anime), a cute anime girl reimagining of the Three Kingdoms figure Yuan Shao: proud aristocratic girl with golden ringlet curls and ornate golden armor, hand on hip, upper body portrait, dramatic pose"
+    },
+    {
+      "key": "lord_sunquan",
+      "group": "诸侯",
+      "name": "孙权",
+      "prompt": "original character design (not based on any existing game or anime), a cute anime girl reimagining of the Three Kingdoms figure Sun Quan: young queenly girl with red hair and green eyes in red-and-black Wu armor, holding a sword, determined, upper body portrait, dramatic pose"
+    },
+    {
+      "key": "lord_liubei",
+      "group": "诸侯",
+      "name": "刘备",
+      "prompt": "original character design (not based on any existing game or anime), a cute anime girl reimagining of the Three Kingdoms figure Liu Bei: kind-hearted gentle girl in green robes with twin swords, apologetic sweet smile, upper body portrait, dramatic pose"
+    },
+    {
+      "key": "lord_caocao",
+      "group": "诸侯",
+      "name": "曹操",
+      "prompt": "original character design (not based on any existing game or anime), a cute anime girl reimagining of the Three Kingdoms figure Cao Cao: charismatic ambitious girl with short silver-blue hair, dark blue cape and armor, holding a wine cup, smug smile, upper body portrait, dramatic pose"
+    },
+    {
+      "key": "lord_simayi",
+      "group": "诸侯",
+      "name": "司马懿",
+      "prompt": "original character design (not based on any existing game or anime), a cute anime girl reimagining of the Three Kingdoms figure Sima Yi: cunning strategist girl in dark purple robes with a black feather fan covering her mouth, sly eyes, upper body portrait, dramatic pose"
+    },
+    {
+      "key": "lord_dongzhuo",
+      "group": "诸侯",
+      "name": "董卓",
+      "prompt": "original character design (not based on any existing game or anime), a cute anime girl reimagining of the Three Kingdoms figure Dong Zhuo: final boss girl, tyrant queen in heavy black-and-crimson armor and spiked crown, arrogant laugh, menacing aura, upper body portrait, dramatic pose"
+    }
+  ]
+}

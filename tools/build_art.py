@@ -2,6 +2,7 @@
 """把 art/ 里的原图压缩成游戏用图，输出到 build/images/。
 
 - 人物立绘（heroine、hero_*、lord_*）：等比缩到高 640，并自动裁一张头像 avatar_<key>.png（128×128）
+- 背景 bg_*：缩到 750 宽以内
 - 其他图（动物、地块、道具）：最长边 256
 - 全部转成 256 色调色板 PNG，控制小游戏包体（主包上限 4MB）
 
@@ -77,6 +78,10 @@ def main():
             av.paste(img.crop(box), (0, 0))
             av = av.resize((AVATAR, AVATAR), Image.LANCZOS)
             save_small(av, OUT / f"avatar_{key}.png")
+        elif key.startswith("bg_"):
+            img = img.convert("RGB")
+            img.thumbnail((750, 1334), Image.LANCZOS)
+            save_small(img, OUT / f"{key}.png")
         else:
             img.thumbnail((ICON, ICON), Image.LANCZOS)
             save_small(img, OUT / f"{key}.png")

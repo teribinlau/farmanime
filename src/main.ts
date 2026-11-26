@@ -35,7 +35,7 @@ const SAFE_BOTTOM = sys.safeArea ? Math.max(0, H - sys.safeArea.bottom) : 0;
 // ---------- 图片 ----------
 const images: Record<string, any> = {};
 const IMAGE_KEYS = [
-  'heroine',
+  'heroine', 'bg_title',
   ...Object.keys(RELICS).map((k) => RELICS[k as RelicId].art),
   'lord_yuanshu', 'lord_liubiao', 'lord_yuanshao', 'lord_sunquan', 'lord_liubei', 'lord_caocao', 'lord_simayi', 'lord_dongzhuo',
   ...Object.keys(CREATURES),
@@ -342,6 +342,16 @@ function drawEnd(win: boolean) {
 }
 
 function drawTitle() {
+  const bg = img('bg_title');
+  if (bg) {
+    const s = Math.max(W / bg.width, H / bg.height);
+    ctx.drawImage(bg, (W - bg.width * s) / 2, (H - bg.height * s) / 2, bg.width * s, bg.height * s);
+    const fade = ctx.createLinearGradient(0, H * 0.45, 0, H);
+    fade.addColorStop(0, 'rgba(255,248,244,0)');
+    fade.addColorStop(0.35, 'rgba(255,248,244,0.85)');
+    fade.addColorStop(1, 'rgba(255,248,244,0.95)');
+    ctx.fillStyle = fade; ctx.fillRect(0, 0, W, H);
+  }
   const hero = img('heroine');
   const ph = H * 0.42;
   if (hero) drawContain(hero, W / 2, SAFE_TOP + ph / 2, W, ph, true);

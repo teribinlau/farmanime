@@ -37,7 +37,7 @@ const SAFE_BOTTOM = sys.safeArea ? Math.max(0, H - sys.safeArea.bottom) : 0;
 // ---------- 图片 ----------
 const images: Record<string, any> = {};
 const IMAGE_KEYS = [
-  'heroine', 'bg_title',
+  'heroine', 'bg_title', 'bg_scene',
   ...Object.keys(RELICS).map((k) => RELICS[k as RelicId].art),
   'lord_yuanshu', 'lord_liubiao', 'lord_yuanshao', 'lord_sunquan', 'lord_liubei', 'lord_caocao', 'lord_simayi', 'lord_dongzhuo',
   ...Object.keys(CREATURES),

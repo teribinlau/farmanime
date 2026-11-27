@@ -134,9 +134,11 @@ function cellCenter(i: number) {
 
 // ---------- 主题 ----------
 const C = {
-  ink: '#15132a', panel: 'rgba(20,18,40,0.80)', panel2: 'rgba(34,29,60,0.88)',
-  gold: '#e8cc85', goldHi: '#fff1c4', goldLo: '#a77e3c', cream: '#f7eedb', muted: '#b9add3',
-  crimson: '#c03a4c', jade: '#58c2a1', violet: '#8e7cf0',
+  // 浅色宣纸 + 墨线：cream 是正文墨色，gold 是铜褐描线，goldHi 是朱砂强调色
+  ink: '#2a211b', panel: 'rgba(250,244,230,0.94)', panel2: 'rgba(242,233,214,0.96)',
+  gold: '#9a7442', goldHi: '#b8432f', goldLo: '#5a3e22', cream: '#3a2e26', muted: '#85735f',
+  crimson: '#b8432f', jade: '#2f8a6e', violet: '#6f9f8c',
+  paper: '#f6efdf', line: 'rgba(90,64,40,0.62)', warn: '#c0392b', ok: '#2f8a6e',
 };
 const SERIF = '"Songti SC","STSongti-SC-Bold","Noto Serif SC","Source Han Serif SC","Noto Serif CJK SC","STSong",serif';
 
@@ -163,7 +165,7 @@ function fillRR(x: number, y: number, w: number, h: number, r: number, color: st
 }
 function goldGrad(y0: number, y1: number) {
   const g = ctx.createLinearGradient(0, y0, 0, y1);
-  g.addColorStop(0, C.goldHi); g.addColorStop(0.5, C.gold); g.addColorStop(1, C.goldLo);
+  g.addColorStop(0, '#4a3a2e'); g.addColorStop(0.55, '#2a211b'); g.addColorStop(1, '#14100c');
   return g;
 }
 /** 深色半透明面板 + 金色细边 + 四角纹饰 */
@@ -171,22 +173,22 @@ function panel(x: number, y: number, w: number, h: number, opt: { c?: number; fi
   const c = opt.c === undefined ? 8 : opt.c;
   ctx.save();
   if (opt.glow) { ctx.shadowColor = opt.glow; ctx.shadowBlur = 16; }
-  else { ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 3; }
+  else { ctx.shadowColor = 'rgba(80,56,30,0.22)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 3; }
   chamfer(x, y, w, h, c);
   if (opt.fill) ctx.fillStyle = opt.fill;
   else {
     const g = ctx.createLinearGradient(0, y, 0, y + h);
-    g.addColorStop(0, 'rgba(40,34,70,0.86)'); g.addColorStop(1, 'rgba(18,16,36,0.90)');
+    g.addColorStop(0, 'rgba(252,247,235,0.95)'); g.addColorStop(1, 'rgba(242,232,210,0.95)');
     ctx.fillStyle = g;
   }
   ctx.fill();
   ctx.restore();
   chamfer(x + 0.5, y + 0.5, w - 1, h - 1, c);
-  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(232,204,133,0.75)'; ctx.stroke();
+  ctx.lineWidth = 1.2; ctx.strokeStyle = C.line; ctx.stroke();
   chamfer(x + 3.5, y + 3.5, w - 7, h - 7, Math.max(0, c - 2));
-  ctx.strokeStyle = 'rgba(232,204,133,0.18)'; ctx.stroke();
+  ctx.lineWidth = 0.8; ctx.strokeStyle = 'rgba(90,64,40,0.18)'; ctx.stroke();
   if (opt.corners !== false) {
-    ctx.fillStyle = C.gold;
+    ctx.fillStyle = C.crimson;
     [[x + w / 2, y], [x + w / 2, y + h]].forEach(([cx, cy]) => {
       ctx.beginPath(); ctx.moveTo(cx, cy - 3.5); ctx.lineTo(cx + 3.5, cy); ctx.lineTo(cx, cy + 3.5); ctx.lineTo(cx - 3.5, cy); ctx.closePath(); ctx.fill();
     });
@@ -205,14 +207,14 @@ function goldText(s: string, x: number, y: number, size: number, align: Align = 
   ctx.font = 'bold ' + size + 'px ' + font;
   ctx.textAlign = align; ctx.textBaseline = 'middle';
   ctx.lineJoin = 'round';
-  ctx.lineWidth = Math.max(2, size / 7); ctx.strokeStyle = 'rgba(40,20,10,0.85)';
+  ctx.lineWidth = Math.max(2, size / 6); ctx.strokeStyle = 'rgba(255,251,240,0.92)';
   ctx.strokeText(s, x, y);
   ctx.fillStyle = goldGrad(y - size / 2, y + size / 2);
   ctx.fillText(s, x, y);
 }
 function shadowText(s: string, x: number, y: number, size: number, color: string, align: Align = 'left', bold = false, font = FONT) {
   ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.7)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 1;
+  ctx.shadowColor = 'rgba(255,250,238,0.95)'; ctx.shadowBlur = 5; ctx.shadowOffsetY = 0;
   text(s, x, y, size, color, align, bold, font);
   ctx.restore();
 }
@@ -236,15 +238,15 @@ type BtnStyle = 'gold' | 'crimson' | 'violet' | 'ghost';
 /** 古风按钮：切角、渐变、顶部高光、金边 */
 function button(label: string, x: number, y: number, w: number, h: number, onTap: () => void, style: BtnStyle = 'gold', enabled = true, size = 17) {
   const cols: Record<BtnStyle, [string, string, string]> = {
-    gold: ['#f6d991', '#c99a4b', '#3b2410'],
-    crimson: ['#e0626f', '#9c2638', '#fff3e3'],
-    violet: ['#a998ff', '#5f4cc4', '#fff8ec'],
-    ghost: ['rgba(60,52,96,0.9)', 'rgba(30,26,52,0.9)', C.cream],
+    gold: ['#d9654b', '#a8341f', '#fff8ec'],
+    crimson: ['#b8432f', '#7e2416', '#fff3e3'],
+    violet: ['#86b9a6', '#4a8571', '#fffaf0'],
+    ghost: ['#fcf7ea', '#ebdfc6', C.cream],
   };
-  const [a, b, fg] = enabled ? cols[style] : ['#77708a', '#4f4a60', '#c9c3d6'];
+  const [a, b, fg] = enabled ? cols[style] : ['#ddd3c2', '#c4b8a4', '#8f8474'];
   const c = Math.min(12, h / 3);
   ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 3;
+  ctx.shadowColor = 'rgba(80,56,30,0.3)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 3;
   chamfer(x, y, w, h, c);
   const g = ctx.createLinearGradient(0, y, 0, y + h);
   g.addColorStop(0, a); g.addColorStop(1, b);
@@ -257,10 +259,10 @@ function button(label: string, x: number, y: number, w: number, h: number, onTap
   ctx.fillStyle = hl; ctx.fillRect(x, y, w, h * 0.5);
   ctx.restore();
   chamfer(x + 0.5, y + 0.5, w - 1, h - 1, c);
-  ctx.lineWidth = 1.2; ctx.strokeStyle = enabled ? 'rgba(255,236,180,0.9)' : 'rgba(200,190,210,0.5)'; ctx.stroke();
+  ctx.lineWidth = 1.2; ctx.strokeStyle = enabled ? (style === 'ghost' ? C.line : 'rgba(70,30,14,0.55)') : 'rgba(120,100,80,0.4)'; ctx.stroke();
   // 两侧小菱形
   if (w > 140) {
-    ctx.fillStyle = enabled ? (style === 'gold' ? '#6b4518' : C.gold) : '#9a93ab';
+    ctx.fillStyle = enabled ? (style === 'ghost' ? C.crimson : 'rgba(255,240,220,0.85)') : '#a89c8a';
     [x + 18, x + w - 18].forEach((cx) => {
       const cy = y + h / 2;
       ctx.beginPath(); ctx.moveTo(cx, cy - 4); ctx.lineTo(cx + 4, cy); ctx.lineTo(cx, cy + 4); ctx.lineTo(cx - 4, cy); ctx.closePath(); ctx.fill();
@@ -292,7 +294,7 @@ function icon(key: string, emoji: string, cx: number, cy: number, fontSize: numb
 function avatar(key: string, emoji: string, cx: number, cy: number, r: number, ring = C.gold) {
   const im = img('avatar_' + key);
   ctx.beginPath(); ctx.arc(cx, cy, r + 2, 0, Math.PI * 2); ctx.fillStyle = ring; ctx.fill();
-  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fillStyle = '#2a2448'; ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fillStyle = '#e9dfc8'; ctx.fill();
   if (!im) { text(emoji, cx, cy, r * 1.2, '#000', 'center'); return; }
   ctx.save();
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
@@ -314,40 +316,54 @@ function diamond(cx: number, cy: number, r: number, color: string) {
 }
 /** 标题两侧的装饰线 */
 function ornamentLine(cx: number, y: number, halfW: number, gap: number) {
-  ctx.strokeStyle = 'rgba(232,204,133,0.8)'; ctx.lineWidth = 1;
+  ctx.strokeStyle = C.line; ctx.lineWidth = 1;
   [[-1], [1]].forEach(([d]) => {
     ctx.beginPath(); ctx.moveTo(cx + d * gap, y); ctx.lineTo(cx + d * halfW, y); ctx.stroke();
-    diamond(cx + d * (gap + 6), y, 3, C.gold);
+    diamond(cx + d * (gap + 6), y, 3, C.crimson);
   });
 }
 
 // ---------- 场景 ----------
 let petals: { x: number; y: number; s: number; v: number; r: number }[] = [];
 for (let k = 0; k < 16; k++) petals.push({ x: (k * 97) % W, y: (k * 151) % H, s: 2 + (k % 3), v: 14 + (k % 5) * 5, r: k });
-function drawBackground(dark = 0.62) {
-  const bg = img('bg_title');
-  if (bg) drawCover(bg, 0, 0, W, H, 0.4);
-  else { ctx.fillStyle = '#3a2f55'; ctx.fillRect(0, 0, W, H); }
-  const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, 'rgba(16,13,34,' + (dark * 0.75) + ')');
-  g.addColorStop(0.45, 'rgba(16,13,34,' + dark + ')');
-  g.addColorStop(1, 'rgba(10,8,22,' + Math.min(0.95, dark + 0.25) + ')');
-  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  // 飘落的花瓣（带一点光晕）
-  ctx.save();
-  ctx.shadowColor = 'rgba(255,180,210,0.9)'; ctx.shadowBlur = 6;
-  ctx.fillStyle = 'rgba(255,190,215,0.75)';
+/** 宣纸底：有场景图就铺场景图，否则画纸纹 + 远山水墨 */
+function drawBackground(dark = 0) {
+  const bg = img('bg_scene');
+  if (bg) drawCover(bg, 0, 0, W, H, 0.5);
+  else paperScene();
+  if (dark > 0) { ctx.fillStyle = 'rgba(246,239,223,' + dark + ')'; ctx.fillRect(0, 0, W, H); }
+  ctx.fillStyle = 'rgba(232,140,160,0.55)';
   petals.forEach((p) => {
     const x = ((p.x + clock * p.v * 0.6) % (W + 40)) - 20;
     const y = ((p.y + clock * p.v) % (H + 40)) - 20;
     ctx.beginPath(); ctx.ellipse(x, y, p.s * 1.6, p.s, (clock * 0.8 + p.r) % Math.PI, 0, Math.PI * 2); ctx.fill();
   });
-  ctx.restore();
+}
+function paperScene() {
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#f3ead6'); g.addColorStop(0.5, '#f8f2e4'); g.addColorStop(1, '#eee3cb');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  // 远山：三层淡墨
+  const layers: [number, number, string][] = [[0.13, 34, 'rgba(120,140,130,0.16)'], [0.17, 26, 'rgba(90,110,100,0.18)'], [0.21, 18, 'rgba(70,86,78,0.16)']];
+  layers.forEach(([base, amp, col], li) => {
+    ctx.beginPath(); ctx.moveTo(0, H);
+    for (let x = 0; x <= W; x += 8) {
+      const y = H * base + Math.sin(x / (60 + li * 23) + li * 2) * amp + Math.sin(x / 23 + li) * amp * 0.25;
+      ctx.lineTo(x, y);
+    }
+    ctx.lineTo(W, H); ctx.closePath(); ctx.fillStyle = col; ctx.fill();
+  });
+  // 下半是淡青草地
+  const gr = ctx.createLinearGradient(0, H * 0.24, 0, H);
+  gr.addColorStop(0, 'rgba(206,222,196,0.0)'); gr.addColorStop(0.15, 'rgba(206,222,196,0.55)'); gr.addColorStop(1, 'rgba(196,212,182,0.7)');
+  ctx.fillStyle = gr; ctx.fillRect(0, H * 0.24, W, H);
+  // 一轮淡朱砂日
+  ctx.beginPath(); ctx.arc(W * 0.8, H * 0.09, 18, 0, Math.PI * 2); ctx.fillStyle = 'rgba(200,80,60,0.22)'; ctx.fill();
 }
 
 function muteButton(x: number, y: number) {
-  ctx.beginPath(); ctx.arc(x, y, 14, 0, Math.PI * 2); ctx.fillStyle = 'rgba(20,18,40,0.7)'; ctx.fill();
-  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(232,204,133,0.7)'; ctx.stroke();
+  ctx.beginPath(); ctx.arc(x, y, 14, 0, Math.PI * 2); ctx.fillStyle = 'rgba(252,247,235,0.92)'; ctx.fill();
+  ctx.lineWidth = 1; ctx.strokeStyle = C.line; ctx.stroke();
   text(muted ? '🔇' : '🔊', x, y + 1, 13, '#fff', 'center');
   hit(x - 18, y - 18, 36, 36, toggleMute);
 }
@@ -359,9 +375,9 @@ function drawHUD() {
   goldText('第' + game.week + '周', PAD + 46, y + 20, 19);
   const day = Math.min(game.day, DAYS_PER_WEEK);
   for (let d = 1; d <= DAYS_PER_WEEK; d++) {
-    diamond(PAD + 46 + (d - 4) * 10, y + 42, d === day ? 4 : 2.8, d < day ? C.gold : d === day ? C.goldHi : 'rgba(232,204,133,0.28)');
+    diamond(PAD + 46 + (d - 4) * 10, y + 42, d === day ? 4 : 2.8, d < day ? C.gold : d === day ? C.crimson : 'rgba(90,64,40,0.2)');
   }
-  if (game.endless) text('无尽', PAD + 46, y + h + 8, 10, '#ff8f9c', 'center', true);
+  if (game.endless) text('无尽', PAD + 46, y + h + 8, 10, C.warn, 'center', true);
   // 右：粮草
   const rx = W - PAD - 104;
   text('🌾', rx + 14, y + 21, 18, '#000', 'center');
@@ -373,20 +389,20 @@ function drawHUD() {
   avatar(lord.art, lord.icon, mx + 12, y + h / 2, 11, C.crimson);
   const left = DAYS_PER_WEEK - day + 1;
   text(lord.name + ' 收军粮', mx + 28, y + 17, 11, C.cream, 'left', true);
-  text('还剩' + left + '天', mx + mw, y + 17, 11, game.coins >= rent ? C.jade : '#ff8f9c', 'right', true);
+  text('还剩' + left + '天', mx + mw, y + 17, 11, game.coins >= rent ? C.jade : C.warn, 'right', true);
   const bx = mx + 28, bw = mw - 28, bh = 12, by = y + 32;
-  fillRR(bx, by, bw, bh, 6, 'rgba(0,0,0,0.5)');
+  fillRR(bx, by, bw, bh, 6, 'rgba(90,64,40,0.14)');
   const ok = game.coins >= rent;
   const f = Math.max(0.03, Math.min(1, game.coins / Math.max(1, rent)));
   const pg = ctx.createLinearGradient(bx, 0, bx + bw, 0);
-  if (ok) { pg.addColorStop(0, '#3a9e82'); pg.addColorStop(1, '#7fe3c1'); } else { pg.addColorStop(0, '#8e2a3a'); pg.addColorStop(1, '#e0707e'); }
+  if (ok) { pg.addColorStop(0, '#4f9e86'); pg.addColorStop(1, '#8cc9b2'); } else { pg.addColorStop(0, '#b8432f'); pg.addColorStop(1, '#e08a72'); }
   fillRR(bx, by, bw * f, bh, 6, pg as any);
-  text(game.coins + ' / ' + rent, bx + bw / 2, by + bh / 2 + 0.5, 9, '#fff', 'center', true);
+  shadowText(game.coins + ' / ' + rent, bx + bw / 2, by + bh / 2 + 0.5, 9, C.ink, 'center', true);
 }
 
 function drawBoard() {
   const fx = BOARD_X - BOARD_PAD, fy = BOARD_Y - BOARD_PAD, fw = CELL * COLS + BOARD_PAD * 2, fh = CELL * ROWS + BOARD_PAD * 2;
-  panel(fx, fy, fw, fh, { c: 12, fill: 'rgba(30,24,44,0.88)' });
+  panel(fx, fy, fw, fh, { c: 12, fill: 'rgba(238,228,204,0.92)' });
   // 伙伴头像挂在棋盘右上角外沿
   let rx = fx + fw - 14;
   for (let k = game.relics.length - 1; k >= 0; k--) {
@@ -412,14 +428,14 @@ function drawBoard() {
     if (cell.terrain === 'wild') { ctx.fillStyle = 'rgba(40,24,30,0.38)'; ctx.fillRect(x, y, CELL, CELL); }
     ctx.restore();
     rr(x + g + 0.5, y + g + 0.5, CELL - g * 2 - 1, CELL - g * 2 - 1, r);
-    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.stroke();
+    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(70,50,30,0.35)'; ctx.stroke();
     if (sel && game.canPlace(sel, cell, true)) {
       const repl = sel.kind === 'creature' && !!cell.c;
       ctx.save();
-      ctx.shadowColor = 'rgba(255,220,140,' + pulse + ')'; ctx.shadowBlur = 10;
+      ctx.shadowColor = 'rgba(184,67,47,' + pulse * 0.8 + ')'; ctx.shadowBlur = 10;
       rr(x + g + 1, y + g + 1, CELL - g * 2 - 2, CELL - g * 2 - 2, r);
       ctx.lineWidth = repl ? 1.5 : 2.5;
-      ctx.strokeStyle = repl ? 'rgba(255,150,160,' + (0.35 + pulse * 0.4) + ')' : 'rgba(255,226,150,' + (0.5 + pulse * 0.5) + ')';
+      ctx.strokeStyle = repl ? 'rgba(184,67,47,' + (0.35 + pulse * 0.4) + ')' : 'rgba(255,250,236,' + (0.6 + pulse * 0.4) + ')';
       if (repl) ctx.setLineDash([4, 3]);
       ctx.stroke();
       ctx.setLineDash([]);
@@ -443,9 +459,9 @@ function drawBoard() {
         ctx.font = 'bold 10px ' + FONT;
         const bw = Math.max(20, ctx.measureText(s).width + 10);
         chamfer(x + CELL - bw - 3, y + CELL - 17, bw, 14, 4);
-        ctx.fillStyle = 'rgba(20,16,36,0.85)'; ctx.fill();
-        ctx.lineWidth = 0.8; ctx.strokeStyle = 'rgba(232,204,133,0.8)'; ctx.stroke();
-        text(s, x + CELL - 3 - bw / 2, y + CELL - 9.5, 10, C.goldHi, 'center', true);
+        ctx.fillStyle = 'rgba(252,247,235,0.95)'; ctx.fill();
+        ctx.lineWidth = 0.8; ctx.strokeStyle = C.line; ctx.stroke();
+        text(s, x + CELL - 3 - bw / 2, y + CELL - 9.5, 10, C.crimson, 'center', true);
       }
     }
     if (game.pendingReplace === i && sel) {
@@ -468,7 +484,7 @@ function drawInfo() {
   const hero = img('avatar_heroine') || null;
   const ar = 27;
   ctx.beginPath(); ctx.arc(x + ar + 2, y + h / 2, ar + 2.5, 0, Math.PI * 2); ctx.fillStyle = C.gold; ctx.fill();
-  ctx.beginPath(); ctx.arc(x + ar + 2, y + h / 2, ar, 0, Math.PI * 2); ctx.fillStyle = '#3a2f58'; ctx.fill();
+  ctx.beginPath(); ctx.arc(x + ar + 2, y + h / 2, ar, 0, Math.PI * 2); ctx.fillStyle = '#e9dfc8'; ctx.fill();
   if (hero) {
     ctx.save(); ctx.beginPath(); ctx.arc(x + ar + 2, y + h / 2, ar, 0, Math.PI * 2); ctx.clip();
     ctx.drawImage(hero, x + 2, y + h / 2 - ar, ar * 2, ar * 2); ctx.restore();
@@ -495,32 +511,32 @@ function drawCardModal() {
     const x = PAD + k * (cw + gap), y = cy;
     const info = cardInfo(card);
     const col = cardColor(card);
-    panel(x, y, cw, ch, { c: 10, corners: false, fill: 'rgba(24,20,44,0.96)' });
+    panel(x, y, cw, ch, { c: 10, corners: false, fill: 'rgba(251,246,234,0.98)' });
     // 顶部名字条
     chamfer(x + 4, y + 4, cw - 8, 30, 6);
     const hg = ctx.createLinearGradient(0, y + 4, 0, y + 34);
-    hg.addColorStop(0, col); hg.addColorStop(1, 'rgba(0,0,0,0.35)');
+    hg.addColorStop(0, col); hg.addColorStop(1, 'rgba(60,40,20,0.25)');
     ctx.fillStyle = hg; ctx.fill();
     text(info.name, x + cw / 2, y + 20, 15, '#fff', 'center', true, SERIF);
     // 画面
     const ah = Math.min(ch * 0.36, cw * 1.05);
     const rg = ctx.createRadialGradient(x + cw / 2, y + 38 + ah / 2, 4, x + cw / 2, y + 38 + ah / 2, cw * 0.6);
-    rg.addColorStop(0, 'rgba(255,255,255,0.18)'); rg.addColorStop(1, 'rgba(255,255,255,0)');
+    rg.addColorStop(0, 'rgba(200,180,140,0.28)'); rg.addColorStop(1, 'rgba(200,180,140,0)');
     ctx.fillStyle = rg; ctx.fillRect(x, y + 38, cw, ah);
     icon(cardArtKey(card), info.icon || '⬛', x + cw / 2, y + 38 + ah / 2, 40, Math.min(cw - 10, ah - 4));
     // 标签 + 收益
-    chamfer(x + cw / 2 - 26, y + 40 + ah, 52, 17, 5); ctx.fillStyle = 'rgba(10,8,20,0.8)'; ctx.fill();
+    chamfer(x + cw / 2 - 26, y + 40 + ah, 52, 17, 5); ctx.fillStyle = 'rgba(60,44,30,0.82)'; ctx.fill();
     text(info.tag, x + cw / 2, y + 48.5 + ah, 10, col, 'center', true);
     // 规则：大字，数字高亮
     const ry = y + 68 + ah;
-    fillRR(x + 6, ry - 6, cw - 12, ch - (ry - y) - 2, 6, 'rgba(255,248,230,0.06)');
+    fillRR(x + 6, ry - 6, cw - 12, ch - (ry - y) - 2, 6, 'rgba(120,90,50,0.07)');
     richWrap(info.desc, x + cw / 2, ry + 10, cw - 20, 13, 19, Math.max(2, Math.floor((ch - (ry - y) - 14) / 19)));
     hit(x, y, cw, ch, () => pickCard(k), info.name);
   });
   const by = cy + ch + 18, bw = (W - PAD * 2 - 12) / 2;
   button('🔄 刷新 🌾' + game.rerollCost, PAD, by, bw, 46, () => game.reroll(), 'violet', game.canReroll(), 15);
   button('跳过', PAD + bw + 12, by, bw, 46, () => { game.skipCards(); }, 'ghost', true, 15);
-  text('点卡牌选择，再点牧场格子放置；点空白处先看看牧场', W / 2, by + 66, 12, C.muted, 'center');
+  shadowText('点卡牌选择，再点牧场格子放置；点空白处先看看牧场', W / 2, by + 66, 12, C.cream, 'center');
 }
 /** 把说明里的数字和关键词标成金色 */
 function richWrap(s: string, cx: number, y: number, maxW: number, size: number, lineH: number, maxLines: number) {
@@ -542,7 +558,7 @@ function richWrap(s: string, cx: number, y: number, maxW: number, size: number, 
     l.replace(key, (m, idx: number) => {
       const before = l.slice(last, idx);
       ctx.font = size + 'px ' + FONT; ctx.fillStyle = C.cream; ctx.fillText(before, x, yy); x += ctx.measureText(before).width;
-      ctx.font = 'bold ' + size + 'px ' + FONT; ctx.fillStyle = /\d/.test(m) ? C.goldHi : '#9fe0c4'; ctx.fillText(m, x, yy); x += ctx.measureText(m).width;
+      ctx.font = 'bold ' + size + 'px ' + FONT; ctx.fillStyle = /\d/.test(m) ? C.crimson : C.jade; ctx.fillText(m, x, yy); x += ctx.measureText(m).width;
       last = idx + m.length;
       return m;
     });
@@ -568,7 +584,7 @@ function drawPickBar() {
 }
 
 function dim(alpha = 0.5) {
-  ctx.fillStyle = 'rgba(8,6,18,' + alpha + ')';
+  ctx.fillStyle = 'rgba(58,44,30,' + alpha * 0.75 + ')';
   ctx.fillRect(0, 0, W, H);
 }
 
@@ -601,13 +617,13 @@ function drawRent() {
   text('第' + game.week + '周军粮', PAD + 20, by, 12, C.muted);
   goldText(String(rent), PAD + 20, by + 22, 22, 'left', FONT);
   text('你的粮草', W - PAD - 20, by, 12, C.muted, 'right');
-  ctx.save(); text(String(game.coins), W - PAD - 20, by + 22, 22, ok ? '#86ecc8' : '#ff8f9c', 'right', true); ctx.restore();
+  ctx.save(); text(String(game.coins), W - PAD - 20, by + 22, 22, ok ? C.ok : C.warn, 'right', true); ctx.restore();
   button(ok ? '交出军粮' : '交不起……', PAD + 20, boxY + boxH - 66, W - PAD * 2 - 40, 50, () => game.payRent(), ok ? 'gold' : 'ghost', true, 18);
 }
 
 /** 三选一招募伙伴：三张竖卡，上半是立绘 */
 function drawRelic() {
-  drawBackground(0.88);
+  drawBackground(0.55);
   const top = SAFE_TOP + 4;
   goldText('招募伙伴', W / 2, top + 18, 26);
   ornamentLine(W / 2, top + 18, W * 0.46, 70);
@@ -620,21 +636,21 @@ function drawRelic() {
   game.relicChoices.forEach((k, idx) => {
     const r = RELICS[k];
     const x = PAD + idx * (cw + gap);
-    panel(x, cy, cw, ch, { c: 10, corners: false, fill: 'rgba(24,20,44,0.95)' });
+    panel(x, cy, cw, ch, { c: 10, corners: false, fill: 'rgba(251,246,234,0.98)' });
     const ph = ch - 118;
     ctx.save(); chamfer(x + 3, cy + 3, cw - 6, ph, 8); ctx.clip();
     const bg = ctx.createLinearGradient(0, cy, 0, cy + ph);
-    bg.addColorStop(0, '#3b2f66'); bg.addColorStop(0.7, '#6a3f6e'); bg.addColorStop(1, '#2a2040');
+    bg.addColorStop(0, '#e6dcc4'); bg.addColorStop(0.7, '#efd9cf'); bg.addColorStop(1, '#f6efdf');
     ctx.fillStyle = bg; ctx.fillRect(x, cy, cw, ph + 4);
     const p = img(r.art);
     if (p) drawCover(p, x + 3, cy + 6, cw - 6, ph + 20, 0);
     else text(r.icon, x + cw / 2, cy + ph / 2, 40, '#000', 'center');
     const fade = ctx.createLinearGradient(0, cy + ph * 0.7, 0, cy + ph + 3);
-    fade.addColorStop(0, 'rgba(24,20,44,0)'); fade.addColorStop(1, 'rgba(24,20,44,1)');
+    fade.addColorStop(0, 'rgba(251,246,234,0)'); fade.addColorStop(1, 'rgba(251,246,234,1)');
     ctx.fillStyle = fade; ctx.fillRect(x, cy + ph * 0.7, cw, ph * 0.3 + 4);
     ctx.restore();
     goldText(r.name, x + cw / 2, cy + ph + 2, 19);
-    text('「' + r.title + '」', x + cw / 2, cy + ph + 26, 11, '#d6a8ff', 'center', false, SERIF);
+    text('「' + r.title + '」', x + cw / 2, cy + ph + 26, 11, '#8a5a7e', 'center', false, SERIF);
     wrap(r.desc, x + cw / 2, cy + ph + 48, cw - 14, 11, C.muted, 15, 4, 'center');
     hit(x, cy, cw, ch, () => game.chooseRelic(k));
   });
@@ -686,15 +702,16 @@ function shareResult() {
 }
 
 function drawTitle() {
-  drawBackground(0.12);
+  const tb = img('bg_title');
+  if (tb) { drawCover(tb, 0, 0, W, H, 0.4); ctx.fillStyle = 'rgba(246,239,223,0.35)'; ctx.fillRect(0, 0, W, H); } else drawBackground();
   // 底部渐暗，托住标题和按钮
   const fade = ctx.createLinearGradient(0, H * 0.42, 0, H);
-  fade.addColorStop(0, 'rgba(14,11,30,0)'); fade.addColorStop(0.45, 'rgba(14,11,30,0.78)'); fade.addColorStop(1, 'rgba(10,8,22,0.95)');
+  fade.addColorStop(0, 'rgba(246,239,223,0)'); fade.addColorStop(0.45, 'rgba(246,239,223,0.82)'); fade.addColorStop(1, 'rgba(240,231,210,0.96)');
   ctx.fillStyle = fade; ctx.fillRect(0, 0, W, H);
   const hero = img('heroine');
   const ph = H * 0.56;
   if (hero) {
-    ctx.save(); ctx.shadowColor = 'rgba(255,200,220,0.5)'; ctx.shadowBlur = 24;
+    ctx.save(); ctx.shadowColor = 'rgba(120,80,50,0.25)'; ctx.shadowBlur = 18;
     drawContain(hero, W / 2, SAFE_TOP + ph / 2 - 6, W * 1.05, ph, true);
     ctx.restore();
   } else text('🌸', W / 2, SAFE_TOP + ph / 2, 72, '#000', 'center');
@@ -715,8 +732,8 @@ function drawTitle() {
   // 玩法说明收进右上角的小按钮
   muteButton(W - PAD - 16, SAFE_TOP + 16);
   const hx = PAD + 16, hy = SAFE_TOP + 16;
-  ctx.beginPath(); ctx.arc(hx, hy, 14, 0, Math.PI * 2); ctx.fillStyle = 'rgba(20,18,40,0.7)'; ctx.fill();
-  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(232,204,133,0.7)'; ctx.stroke();
+  ctx.beginPath(); ctx.arc(hx, hy, 14, 0, Math.PI * 2); ctx.fillStyle = 'rgba(252,247,235,0.92)'; ctx.fill();
+  ctx.lineWidth = 1; ctx.strokeStyle = C.line; ctx.stroke();
   text('?', hx, hy + 1, 15, C.gold, 'center', true);
   hit(hx - 18, hy - 18, 36, 36, () => { showHelp = !showHelp; }, '玩法');
   if (showHelp) drawHelp();

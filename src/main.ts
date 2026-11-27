@@ -329,7 +329,7 @@ for (let k = 0; k < 16; k++) petals.push({ x: (k * 97) % W, y: (k * 151) % H, s:
 /** 宣纸底：有场景图就铺场景图，否则画纸纹 + 远山水墨 */
 function drawBackground(dark = 0) {
   const bg = img('bg_scene');
-  if (bg) drawCover(bg, 0, 0, W, H, 0.5);
+  if (bg) drawScene(bg);
   else paperScene();
   if (dark > 0) { ctx.fillStyle = 'rgba(246,239,223,' + dark + ')'; ctx.fillRect(0, 0, W, H); }
   ctx.fillStyle = 'rgba(232,140,160,0.55)';
@@ -338,6 +338,26 @@ function drawBackground(dark = 0) {
     const y = ((p.y + clock * p.v) % (H + 40)) - 20;
     ctx.beginPath(); ctx.ellipse(x, y, p.s * 1.6, p.s, (clock * 0.8 + p.r) % Math.PI, 0, Math.PI * 2); ctx.fill();
   });
+}
+/** 场景图里围栏草地的位置（按原图比例），把它对齐到棋盘外框：上下两段等比，中间草地纵向拉伸 */
+const MEADOW = { x0: 0.075, x1: 0.925, top: 0.36, bottom: 0.685 };
+function drawScene(bg: any) {
+  const iw = bg.width, ih = bg.height;
+  const fx = BOARD_X - BOARD_PAD, fy = BOARD_Y - BOARD_PAD, fw = CELL * COLS + BOARD_PAD * 2, fh = CELL * ROWS + BOARD_PAD * 2;
+  const mx0 = MEADOW.x0 * iw, mx1 = MEADOW.x1 * iw, ft = MEADOW.top * ih, fb = MEADOW.bottom * ih;
+  const s = Math.max((fw + 22) / (mx1 - mx0), W / iw);
+  let dx = fx + fw / 2 - ((mx0 + mx1) / 2) * s;
+  dx = Math.min(0, Math.max(W - iw * s, dx));
+  const a = ft + 0.025 * ih, b = fb - 0.025 * ih;
+  const ya = fy - 10 + (a - ft) * s;
+  const yb = fy + fh + 10 - (fb - b) * s;
+  const dw = iw * s;
+  // 上段：不够高时整体略拉伸铺满顶部
+  const topH = Math.max(a * s, ya);
+  ctx.drawImage(bg, 0, 0, iw, a, dx, ya - topH, dw, topH);
+  ctx.drawImage(bg, 0, a, iw, b - a, dx, ya, dw, yb - ya);
+  const botH = Math.max((ih - b) * s, H - yb);
+  ctx.drawImage(bg, 0, b, iw, ih - b, dx, yb, dw, botH);
 }
 function paperScene() {
   const g = ctx.createLinearGradient(0, 0, 0, H);
@@ -402,7 +422,8 @@ function drawHUD() {
 
 function drawBoard() {
   const fx = BOARD_X - BOARD_PAD, fy = BOARD_Y - BOARD_PAD, fw = CELL * COLS + BOARD_PAD * 2, fh = CELL * ROWS + BOARD_PAD * 2;
-  panel(fx, fy, fw, fh, { c: 12, fill: 'rgba(238,228,204,0.92)' });
+  if (img('bg_scene')) fillRR(fx + 2, fy + 2, fw - 4, fh - 4, 10, 'rgba(70,90,40,0.10)');
+  else panel(fx, fy, fw, fh, { c: 12, fill: 'rgba(238,228,204,0.92)' });
   // 伙伴头像挂在棋盘右上角外沿
   let rx = fx + fw - 14;
   for (let k = game.relics.length - 1; k >= 0; k--) {

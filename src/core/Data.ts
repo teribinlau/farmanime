@@ -3,7 +3,7 @@
 export const COLS = 5;
 export const ROWS = 4;
 export const DAYS_PER_WEEK = 7;
-export const RENT = [30, 90, 180, 350, 600, 950, 1400, 2000];
+export const RENT = [30, 85, 170, 320, 540, 850, 1250, 1800];
 
 export type TerrainId = 'wild' | 'grass' | 'pond' | 'flower' | 'forest' | 'cave';
 export type CreatureId =

@@ -464,13 +464,30 @@ function drawBoard() {
 
     }
     if (cell.c) {
-      // 地面阴影
-      ctx.beginPath(); ctx.ellipse(x + CELL / 2, y + CELL * 0.84, CELL * 0.28, CELL * 0.07, 0, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fill();
+      // 换位置：先停在原处（等夜里的收入数字飘完），再跳到新格子
+      const id = cell.c.id;
+      const prev = cellOfId[id];
+      if (prev !== undefined && prev !== i && !hops[id]) hops[id] = { from: prev, start: Math.max(clock, waitUntil) + (i % 5) * 0.04 };
+      cellOfId[id] = i;
+      let ox = 0, oy = 0, lift = 0;
+      const hop = hops[id];
+      if (hop) {
+        const fc = cellCenter(hop.from), tc = cellCenter(i);
+        const t = Math.max(0, Math.min(1, (clock - hop.start) / 0.45));
+        const e = t * t * (3 - 2 * t);
+        ox = (fc.x - tc.x) * (1 - e); oy = (fc.y - tc.y) * (1 - e);
+        lift = Math.sin(Math.PI * t) * CELL * 0.35;
+        if (t >= 1) delete hops[id];
+      }
+      if (!hop) {
+        ctx.beginPath(); ctx.ellipse(x + CELL / 2, y + CELL * 0.84, CELL * 0.28, CELL * 0.07, 0, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fill();
+      }
       const pt = clock - (popAt[i] || -9);
       const k = pt < 0.35 ? popScale(pt / 0.35) : 1;
-      const bob = Math.sin(clock * 2 + i) * 0.8;
-      icon(cell.c.type, CREATURES[cell.c.type].icon, x + CELL / 2, y + CELL / 2 + bob + (1 - k) * 6, Math.floor(CELL * 0.5 * k), CELL * 0.84 * k);
+      const bob = hop ? 0 : Math.sin(clock * 2 + i) * 0.8;
+      moving.push(() => icon(cell.c!.type, CREATURES[cell.c!.type].icon, x + CELL / 2 + ox, y + CELL / 2 + bob + oy - lift + (1 - k) * 6, Math.floor(CELL * 0.5 * k), CELL * 0.84 * k));
+      if (!hop) moving.pop()!();
       if (cell.c.bonus > 0) {
         diamond(x + 11, y + 11, 8, C.violet);
         text('+' + cell.c.bonus, x + 11, y + 11.5, 8, '#fff', 'center', true);
@@ -493,7 +510,12 @@ function drawBoard() {
     }
     hit(x, y, CELL, CELL, () => game.tapCell(i));
   });
+  moving.forEach((f) => f());
+  moving = [];
 }
+const cellOfId: Record<number, number> = {};
+const hops: Record<number, { from: number; start: number }> = {};
+let moving: (() => void)[] = [];
 
 /** 新放下的动物弹一下：0→1 时略微超出再回落 */
 function popScale(t: number) { const c = 1.7; const u = t - 1; return Math.max(0.05, 1 + (c + 1) * u * u * u + c * u * u); }
@@ -768,7 +790,7 @@ function drawHelp() {
   ornamentLine(W / 2, y + 30, w * 0.4, 44);
   [
     '每天从卡牌里选一张：动物、地形或道具',
-    '动物看地形和周围邻居产出粮草',
+    '动物看地形和周围邻居产出粮草；每天早上动物们会随机换位置',
     '每 7 天有诸侯来收军粮，交不起牧场就没了',
     '交完军粮招一位伙伴，撑过 8 周即通关',
     '狐狸、夜枭、小云龙会吃邻居，牧羊犬旁边的动物不会被吃',
@@ -823,7 +845,7 @@ function frame(ts?: number) {
     drawPickBar();
     muteButton(PAD + 18, BTN_Y + BTN_H / 2);
     button('🌙 结束今天', PAD + 42, BTN_Y, W - PAD * 2 - 42, BTN_H, endDay, game.choices.length ? 'violet' : 'gold', game.canEndDay() && clock >= waitUntil, 18);
-    if (game.mode === 'play' && cardModal && game.choices.length && game.selected < 0 && clock >= waitUntil) drawCardModal();
+    if (game.mode === 'play' && cardModal && game.choices.length && game.selected < 0 && clock >= waitUntil + 0.7) drawCardModal();
     drawFloats(dt);
     if (clock >= waitUntil) {
       if (game.mode === 'rent') drawRent();
@@ -836,7 +858,8 @@ function frame(ts?: number) {
 
 function endDay() {
   sfx('night');
-  if (game.endDay()) waitUntil = clock + 0.9;
+  // 先让收入数字飘一会儿，再让动物跳到新位置、弹出新一天的卡
+  waitUntil = clock + (game.endDay() ? 0.9 : 0.6);
   saveRun();
 }
 
@@ -849,11 +872,12 @@ function feedback(before: string, coins: number, cells: string[]) {
     sfx('tap'); return;
   }
   let changed = false;
+  const oldIds = cells.map((x) => { const o = x ? JSON.parse(x) : null; return o && o.c ? o.c.id : -1; });
   game.board.forEach((c, i) => {
     if (JSON.stringify(c) === cells[i]) return;
     changed = true;
-    const old = cells[i] ? JSON.parse(cells[i]) : null;
-    if (c.c && (!old || !old.c || old.c.id !== c.c.id)) popAt[i] = clock;
+    // 只有新来的动物弹一下；换位置的动物由 drawBoard 做跳跃动画
+    if (c.c && oldIds.indexOf(c.c.id) < 0) popAt[i] = clock;
   });
   if (changed) { sfx('place'); buzz(); }
   if (game.coins > coins) sfx('coin');
@@ -896,3 +920,10 @@ requestAnimationFrame(frame);
 // 方便浏览器里调试
 (globalThis as any).__game = game;
 (globalThis as any).__buttons = () => buttons;
+
+// 新开一局或读档时，清掉换位置动画的记录，免得旧编号的动物乱跳
+function resetHops() { for (const k in cellOfId) delete cellOfId[k]; for (const k in hops) delete hops[k]; }
+const _newGame = game.newGame.bind(game);
+game.newGame = () => { resetHops(); _newGame(); };
+const _load = game.load.bind(game);
+game.load = (s: string) => { resetHops(); return _load(s); };

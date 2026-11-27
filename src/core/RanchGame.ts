@@ -95,7 +95,17 @@ export class RanchGame {
     return { kind, type: this.pick(pool) };
   }
 
-  private startDay() {
+  /** 每天早上动物们随机换位置（地形不动） */
+  shuffleCreatures() {
+    const cs = this.board.map((c) => c.c).filter((c): c is Creature => !!c);
+    const slots = this.board.map((_, i) => i);
+    for (let k = slots.length - 1; k > 0; k--) { const j = this.rand(k + 1); const t = slots[k]; slots[k] = slots[j]; slots[j] = t; }
+    this.board.forEach((c) => (c.c = null));
+    cs.forEach((c, k) => (this.board[slots[k]].c = c));
+  }
+
+  private startDay(shuffle = false) {
+    if (shuffle) this.shuffleCreatures();
     const n = 3 + (this.has('extra_card') ? 1 : 0);
     this.choices = [];
     for (let k = 0; k < n; k++) this.choices.push(this.drawCard());
@@ -316,7 +326,8 @@ export class RanchGame {
     this.total += sum + interest;
     this.info = '第' + this.day + '天收入 +' + (sum + interest)
       + (interest ? '（含利息' + interest + '）' : '')
-      + (events.length ? '。' + events.join('，') : '');
+      + (events.length ? '。' + events.join('，') : '')
+      + '。天亮了，动物们换了位置';
 
     this.day++;
     if (this.day > DAYS_PER_WEEK) {
@@ -325,7 +336,7 @@ export class RanchGame {
       this.mode = 'rent';
       return true;
     }
-    this.startDay();
+    this.startDay(true);
     return false;
   }
 
@@ -364,7 +375,7 @@ export class RanchGame {
     this.week++;
     this.day = 1;
     this.info = info;
-    this.startDay();
+    this.startDay(true);
     this.mode = 'play';
   }
 

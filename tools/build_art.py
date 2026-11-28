@@ -28,8 +28,51 @@ def is_portrait(key: str) -> bool:
 
 
 def save_small(img: Image.Image, path: Path):
+    if img.mode == "RGBA" and img.getchannel("A").getextrema()[0] < 255:
+        save_alpha_palette(img, path)
+        return
     q = img.quantize(colors=256, method=Image.Quantize.FASTOCTREE, dither=Image.Dither.NONE)
     q.save(path, optimize=True)
+
+
+def save_alpha_palette(img: Image.Image, path: Path):
+    """带透明的图存成 256 色调色板 PNG，但身体内部保证完全不透明。
+    直接对 RGBA 做八叉树量化会把内部像素的不透明度压到 245 左右，浅色背景上看着发虚。
+    做法：0 号色给全透明；完全不透明的像素用 224 色；半透明的边缘单独用 31 色（带各自的透明度）。"""
+    import numpy as np
+    a = np.array(img.getchannel("A"))
+    a = np.where(a >= 235, 255, np.where(a <= 10, 0, a)).astype(np.uint8)
+    rgb = np.array(img.convert("RGB"))
+    h, w = a.shape
+    idx = np.zeros((h, w), np.uint8)
+    pal = [(0, 0, 0)]
+    alphas = [0]
+    op = a == 255
+    if op.any():
+        px = Image.fromarray(rgb[op].reshape(-1, 1, 3))
+        q = px.quantize(colors=224, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+        qp = q.getpalette()[: 224 * 3]
+        n = len(qp) // 3
+        idx[op] = np.array(q).reshape(-1) + 1
+        pal += [tuple(qp[k * 3:k * 3 + 3]) for k in range(n)]
+        alphas += [255] * n
+        pal += [(0, 0, 0)] * (224 - n); alphas += [0] * (224 - n)
+    else:
+        pal += [(0, 0, 0)] * 224; alphas += [0] * 224
+    edge = (a > 0) & (a < 255)
+    if edge.any():
+        e = np.concatenate([rgb[edge], a[edge][:, None]], axis=1).reshape(-1, 1, 4)
+        q = Image.fromarray(e, "RGBA").quantize(colors=31, method=Image.Quantize.FASTOCTREE, dither=Image.Dither.NONE)
+        qp = q.getpalette(rawmode="RGBA")[: 31 * 4]
+        n = len(qp) // 4
+        idx[edge] = np.array(q).reshape(-1) + 225
+        pal += [tuple(qp[k * 4:k * 4 + 3]) for k in range(n)]
+        alphas += [qp[k * 4 + 3] for k in range(n)]
+    out = Image.fromarray(idx, "P")
+    flat = [c for t in pal for c in t]
+    out.putpalette(flat + [0] * (768 - len(flat)))
+    out.info["transparency"] = bytes(alphas + [0] * (256 - len(alphas)))
+    out.save(path, optimize=True, transparency=bytes(alphas + [0] * (256 - len(alphas))))
 
 
 def head_box(img: Image.Image, key: str = ""):

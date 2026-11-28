@@ -14,11 +14,11 @@ function play(smart: boolean, endless = false) {
       if (smart) {
         g.choices.forEach((c, k) => g.board.forEach((_, i) => {
           if (!g.canPlace(c, g.board[i])) return;
-          const snap = JSON.stringify({ b: g.board, ch: g.choices, coins: g.coins, p: g.picksLeft });
+          const snap = JSON.stringify({ b: g.board, ch: g.choices, coins: g.coins, p: g.picksLeft, pl: g.pool, n: g.info });
           g.selected = k; g.tapCell(i);
           let v = g.previewIncome() * 7 + g.coins;
           if (c.kind === 'creature' && c.type === 'dragon') v += 40;
-          const s = JSON.parse(snap); g.board = s.b; g.choices = s.ch; g.coins = s.coins; g.picksLeft = s.p; g.selected = -1;
+          const s = JSON.parse(snap); g.board = s.b; g.choices = s.ch; g.coins = s.coins; g.picksLeft = s.p; g.pool = s.pl; g.info = s.n; g.selected = -1;
           if (v > bestV) { bestV = v; bk = k; bi = i; }
         }));
       } else {

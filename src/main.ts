@@ -1,7 +1,7 @@
 // 群芳牧场 —— 微信小游戏（原生 Canvas 2D，无引擎）
 // 规则在 core/，这里只负责绘制和触摸。浏览器试玩时由 web/index.html 提供一个简化版 wx。
-import { COLS, ROWS, DAYS_PER_WEEK, TERRAINS, CREATURES, RELICS, ITEMS, cardInfo, Card, RelicId } from './core/Data';
-import { RanchGame } from './core/RanchGame';
+import { COLS, ROWS, DAYS_PER_WEEK, TERRAINS, CREATURES, RELICS, ITEMS, FAMILIES, cardInfo, Card, RelicId } from './core/Data';
+import { RanchGame, POOL_MAX } from './core/RanchGame';
 
 declare const wx: any;
 /** 打包时由 build.mjs 写入：images/ 里实际存在的图片 key */
@@ -139,11 +139,14 @@ const C = {
   gold: '#9a7442', goldHi: '#b8432f', goldLo: '#5a3e22', cream: '#3a2e26', muted: '#85735f',
   crimson: '#b8432f', jade: '#2f8a6e', violet: '#6f9f8c',
   paper: '#f6efdf', line: 'rgba(90,64,40,0.62)', warn: '#c0392b', ok: '#2f8a6e',
+  // 深色漆底上的文字
+  lacq: '#f6e7c4', lacqMuted: 'rgba(246,231,196,0.62)', brass: '#e2bc6a',
 };
 const SERIF = '"Songti SC","STSongti-SC-Bold","Noto Serif SC","Source Han Serif SC","Noto Serif CJK SC","STSong",serif';
 
 // ---------- 绘制工具 ----------
 function rr(x: number, y: number, w: number, h: number, r: number) {
+  r = Math.max(0, Math.min(r, w / 2, h / 2));
   ctx.beginPath();
   ctx.moveTo(x + r, y);
   ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
@@ -168,31 +171,122 @@ function goldGrad(y0: number, y1: number) {
   g.addColorStop(0, '#4a3a2e'); g.addColorStop(0.55, '#2a211b'); g.addColorStop(1, '#14100c');
   return g;
 }
-/** 深色半透明面板 + 金色细边 + 四角纹饰 */
-function panel(x: number, y: number, w: number, h: number, opt: { c?: number; fill?: string; corners?: boolean; glow?: string } = {}) {
-  const c = opt.c === undefined ? 8 : opt.c;
+/** 金属渐变：金、银、铜、玉，用于边框和描边 */
+type Metal = 'gold' | 'silver' | 'bronze' | 'jade' | 'red';
+const METALS: Record<Metal, string[]> = {
+  gold: ['#fff2c8', '#e3bd6b', '#9a6a2a', '#f4d68f', '#7a531f'],
+  silver: ['#ffffff', '#d3dae0', '#7d8892', '#eef2f5', '#646d75'],
+  bronze: ['#f2cfa2', '#bd8250', '#74441f', '#d49a62', '#56311a'],
+  jade: ['#e8fff5', '#85cfb2', '#2f7a62', '#ace0ca', '#225a48'],
+  red: ['#ffb8a0', '#d9533c', '#8e1f16', '#e8735a', '#6a140c'],
+};
+function metal(kind: Metal, x0: number, y0: number, x1: number, y1: number) {
+  const g = ctx.createLinearGradient(x0, y0, x1, y1);
+  const s = METALS[kind];
+  [0, 0.28, 0.5, 0.72, 1].forEach((p, k) => g.addColorStop(p, s[k]));
+  return g;
+}
+/** 祥云角花：角在原点，两条云尾沿 +x、+y 伸出 */
+function cloudCorner(x: number, y: number, s: number, rot: number, color: string | CanvasGradient = C.gold) {
   ctx.save();
-  if (opt.glow) { ctx.shadowColor = opt.glow; ctx.shadowBlur = 16; }
-  else { ctx.shadowColor = 'rgba(80,56,30,0.22)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 3; }
+  ctx.translate(x, y); ctx.rotate(rot);
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = Math.max(1, s * 0.16); ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.arc(s, s, s * 0.62, Math.PI * 0.55, Math.PI * 2.05); ctx.stroke();
+  ctx.beginPath(); ctx.arc(s * 1.05, s * 1.05, s * 0.26, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(s * 1.62, s); ctx.quadraticCurveTo(s * 2.3, s * 0.35, s * 3.3, s * 0.18); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(s, s * 1.62); ctx.quadraticCurveTo(s * 0.35, s * 2.3, s * 0.18, s * 3.3); ctx.stroke();
+  ctx.restore();
+}
+function corners4(x: number, y: number, w: number, h: number, s: number, color: string | CanvasGradient) {
+  cloudCorner(x, y, s, 0, color);
+  cloudCorner(x + w, y, s, Math.PI / 2, color);
+  cloudCorner(x + w, y + h, s, Math.PI, color);
+  cloudCorner(x, y + h, s, -Math.PI / 2, color);
+}
+interface PanelOpt { c?: number; fill?: string | CanvasGradient; corners?: boolean; glow?: string; frame?: Metal; dark?: boolean; }
+/** 面板：金属外框 + 象牙纸面（或黑漆面）+ 内描线 + 祥云角花 */
+function panel(x: number, y: number, w: number, h: number, opt: PanelOpt = {}) {
+  const c = opt.c === undefined ? 8 : opt.c;
+  const frame = opt.frame || (opt.dark ? 'gold' : 'bronze');
+  ctx.save();
+  if (opt.glow) { ctx.shadowColor = opt.glow; ctx.shadowBlur = 18; }
+  else { ctx.shadowColor = 'rgba(40,24,10,0.32)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = 4; }
   chamfer(x, y, w, h, c);
+  ctx.fillStyle = metal(frame, x, y, x + w * 0.6, y + h); ctx.fill();
+  ctx.restore();
+  const b = 2.5;
+  chamfer(x + b, y + b, w - b * 2, h - b * 2, Math.max(0, c - 1));
   if (opt.fill) ctx.fillStyle = opt.fill;
-  else {
+  else if (opt.dark) {
     const g = ctx.createLinearGradient(0, y, 0, y + h);
-    g.addColorStop(0, 'rgba(252,247,235,0.95)'); g.addColorStop(1, 'rgba(242,232,210,0.95)');
+    g.addColorStop(0, '#3d2a22'); g.addColorStop(1, '#1a110d');
+    ctx.fillStyle = g;
+  } else {
+    const g = ctx.createLinearGradient(0, y, 0, y + h);
+    g.addColorStop(0, '#fffaf0'); g.addColorStop(0.6, '#f9f1df'); g.addColorStop(1, '#f0e3c6');
     ctx.fillStyle = g;
   }
   ctx.fill();
+  // 顶部内阴影，让纸面像嵌在框里
+  ctx.save(); chamfer(x + b, y + b, w - b * 2, h - b * 2, Math.max(0, c - 1)); ctx.clip();
+  const ish = ctx.createLinearGradient(0, y, 0, y + 12);
+  ish.addColorStop(0, opt.dark ? 'rgba(255,220,160,0.14)' : 'rgba(110,70,30,0.16)'); ish.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = ish; ctx.fillRect(x, y, w, 12);
   ctx.restore();
-  chamfer(x + 0.5, y + 0.5, w - 1, h - 1, c);
-  ctx.lineWidth = 1.2; ctx.strokeStyle = C.line; ctx.stroke();
-  chamfer(x + 3.5, y + 3.5, w - 7, h - 7, Math.max(0, c - 2));
-  ctx.lineWidth = 0.8; ctx.strokeStyle = 'rgba(90,64,40,0.18)'; ctx.stroke();
-  if (opt.corners !== false) {
-    ctx.fillStyle = C.crimson;
-    [[x + w / 2, y], [x + w / 2, y + h]].forEach(([cx, cy]) => {
-      ctx.beginPath(); ctx.moveTo(cx, cy - 3.5); ctx.lineTo(cx + 3.5, cy); ctx.lineTo(cx, cy + 3.5); ctx.lineTo(cx - 3.5, cy); ctx.closePath(); ctx.fill();
-    });
+  const ins = 6.5;
+  if (w > 60 && h > 40) {
+    chamfer(x + ins, y + ins, w - ins * 2, h - ins * 2, Math.max(0, c - 4));
+    ctx.lineWidth = 0.8; ctx.strokeStyle = opt.dark ? 'rgba(226,188,106,0.45)' : 'rgba(154,106,42,0.45)'; ctx.stroke();
   }
+  if (opt.corners !== false && w > 90 && h > 70) {
+    const s = Math.min(9, h / 9);
+    corners4(x + ins + 2, y + ins + 2, w - ins * 2 - 4, h - ins * 2 - 4, s, opt.dark ? 'rgba(226,188,106,0.85)' : 'rgba(154,106,42,0.8)');
+  }
+}
+/** 黑漆胶囊：顶部资源条用 */
+function lacquer(x: number, y: number, w: number, h: number, r = 12) {
+  ctx.save();
+  ctx.shadowColor = 'rgba(30,16,8,0.4)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 3;
+  rr(x, y, w, h, r);
+  const g = ctx.createLinearGradient(0, y, 0, y + h);
+  g.addColorStop(0, 'rgba(66,44,34,0.94)'); g.addColorStop(1, 'rgba(24,15,11,0.94)');
+  ctx.fillStyle = g; ctx.fill();
+  ctx.restore();
+  rr(x + 0.75, y + 0.75, w - 1.5, h - 1.5, r);
+  ctx.lineWidth = 1.5; ctx.strokeStyle = metal('gold', x, y, x + w * 0.5, y + h); ctx.stroke();
+  rr(x + 3.5, y + 3.5, w - 7, h - 7, Math.max(2, r - 3));
+  ctx.lineWidth = 0.6; ctx.strokeStyle = 'rgba(226,188,106,0.3)'; ctx.stroke();
+  // 顶部高光
+  ctx.save(); rr(x, y, w, h, r); ctx.clip();
+  const hl = ctx.createLinearGradient(0, y, 0, y + h * 0.5);
+  hl.addColorStop(0, 'rgba(255,230,190,0.16)'); hl.addColorStop(1, 'rgba(255,230,190,0)');
+  ctx.fillStyle = hl; ctx.fillRect(x, y, w, h * 0.5);
+  ctx.restore();
+}
+/** 飘带横幅：标题用 */
+function ribbon(cx: number, y: number, w: number, h: number, label: string, size = 20, kind: Metal = 'red') {
+  const x = cx - w / 2;
+  const tail = h * 0.75;
+  // 两端折尾
+  [-1, 1].forEach((d) => {
+    const ex = d < 0 ? x - tail * 0.9 : x + w + tail * 0.9;
+    const ix = d < 0 ? x + tail * 0.5 : x + w - tail * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(ix, y + 6); ctx.lineTo(ex, y + 6); ctx.lineTo(ex + d * -tail * 0.4, y + 6 + h / 2); ctx.lineTo(ex, y + 6 + h); ctx.lineTo(ix, y + 6 + h); ctx.closePath();
+    ctx.fillStyle = kind === 'red' ? '#7a1a12' : '#2a1a12'; ctx.fill();
+    ctx.lineWidth = 1; ctx.strokeStyle = metal('gold', ex, y, ix, y + h); ctx.stroke();
+  });
+  ctx.save();
+  ctx.shadowColor = 'rgba(40,10,5,0.4)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 3;
+  chamfer(x, y, w, h, 4);
+  const g = ctx.createLinearGradient(0, y, 0, y + h);
+  if (kind === 'red') { g.addColorStop(0, '#d8523b'); g.addColorStop(0.55, '#ac2c1d'); g.addColorStop(1, '#801b12'); }
+  else { g.addColorStop(0, '#4a3328'); g.addColorStop(1, '#1d130e'); }
+  ctx.fillStyle = g; ctx.fill();
+  ctx.restore();
+  chamfer(x + 0.75, y + 0.75, w - 1.5, h - 1.5, 4); ctx.lineWidth = 1.5; ctx.strokeStyle = metal('gold', x, y, x + w, y + h); ctx.stroke();
+  chamfer(x + 4, y + 4, w - 8, h - 8, 2); ctx.lineWidth = 0.6; ctx.strokeStyle = 'rgba(255,220,160,0.45)'; ctx.stroke();
+  metalText(label, cx, y + h / 2 + 1, size, 'center');
 }
 type Align = 'left' | 'center' | 'right';
 function text(s: string, x: number, y: number, size: number, color: string, align: Align = 'left', bold = false, font = FONT) {
@@ -202,7 +296,7 @@ function text(s: string, x: number, y: number, size: number, color: string, alig
   ctx.textBaseline = 'middle';
   ctx.fillText(s, x, y);
 }
-/** 金色描边大字（标题、数字） */
+/** 浅底上的墨色大字（标题、数字） */
 function goldText(s: string, x: number, y: number, size: number, align: Align = 'center', font = SERIF) {
   ctx.font = 'bold ' + size + 'px ' + font;
   ctx.textAlign = align; ctx.textBaseline = 'middle';
@@ -210,6 +304,23 @@ function goldText(s: string, x: number, y: number, size: number, align: Align = 
   ctx.lineWidth = Math.max(2, size / 6); ctx.strokeStyle = 'rgba(255,251,240,0.92)';
   ctx.strokeText(s, x, y);
   ctx.fillStyle = goldGrad(y - size / 2, y + size / 2);
+  ctx.fillText(s, x, y);
+}
+/** 深底上的鎏金字：金属渐变 + 深色描边 + 投影 */
+function metalText(s: string, x: number, y: number, size: number, align: Align = 'center', font = SERIF, kind: Metal = 'gold') {
+  ctx.save();
+  ctx.font = 'bold ' + size + 'px ' + font;
+  ctx.textAlign = align; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  ctx.shadowColor = 'rgba(20,8,4,0.55)'; ctx.shadowBlur = 3; ctx.shadowOffsetY = 1.5;
+  ctx.lineWidth = Math.max(2, size / 7); ctx.strokeStyle = 'rgba(40,18,8,0.9)';
+  ctx.strokeText(s, x, y);
+  ctx.restore();
+  ctx.font = 'bold ' + size + 'px ' + font;
+  ctx.textAlign = align; ctx.textBaseline = 'middle';
+  const g = ctx.createLinearGradient(0, y - size / 2, 0, y + size / 2);
+  const m = METALS[kind];
+  g.addColorStop(0, m[0]); g.addColorStop(0.45, m[1]); g.addColorStop(0.55, m[3]); g.addColorStop(1, m[2]);
+  ctx.fillStyle = g;
   ctx.fillText(s, x, y);
 }
 function shadowText(s: string, x: number, y: number, size: number, color: string, align: Align = 'left', bold = false, font = FONT) {
@@ -234,41 +345,64 @@ function wrap(s: string, x: number, y: number, maxW: number, size: number, color
   return lines.length;
 }
 function hit(x: number, y: number, w: number, h: number, onTap: () => void, label?: string) { buttons.push({ x, y, w, h, onTap, label }); }
+/** 最近一次按下的按钮（按位置认），用来做按压动画 */
+let press: { x: number; y: number; t: number } | null = null;
+function pressAmount(x: number, y: number) {
+  if (!press || press.x !== x || press.y !== y) return 0;
+  const k = (clock - press.t) / 0.22;
+  return k >= 1 ? 0 : Math.sin(Math.PI * k);
+}
 type BtnStyle = 'gold' | 'crimson' | 'violet' | 'ghost';
-/** 古风按钮：切角、渐变、顶部高光、金边 */
+/** 按钮：有厚度的漆面 + 鎏金边 + 顶部高光，按下会压下去 */
 function button(label: string, x: number, y: number, w: number, h: number, onTap: () => void, style: BtnStyle = 'gold', enabled = true, size = 17) {
-  const cols: Record<BtnStyle, [string, string, string]> = {
-    gold: ['#d9654b', '#a8341f', '#fff8ec'],
-    crimson: ['#b8432f', '#7e2416', '#fff3e3'],
-    violet: ['#86b9a6', '#4a8571', '#fffaf0'],
-    ghost: ['#fcf7ea', '#ebdfc6', C.cream],
+  const cols: Record<BtnStyle, [string, string, string, string]> = {
+    gold: ['#e35a41', '#a8291b', '#5e130b', '#fff4dc'],
+    crimson: ['#c8442f', '#86200f', '#4c0f07', '#fff1d8'],
+    violet: ['#5db195', '#2c7560', '#163e33', '#f2fff8'],
+    ghost: ['#fffaf0', '#eadcbd', '#9b7f55', '#4a3424'],
   };
-  const [a, b, fg] = enabled ? cols[style] : ['#ddd3c2', '#c4b8a4', '#8f8474'];
-  const c = Math.min(12, h / 3);
+  const [a, b, base, fg] = enabled ? cols[style] : ['#ddd4c4', '#c2b7a5', '#8f8676', '#8a7f70'];
+  const p = pressAmount(x, y);
+  const depth = Math.min(5, h * 0.1);
+  const dy = p * (depth - 1);
+  const fh = h - depth;
+  const c = Math.min(10, fh / 3.2);
   ctx.save();
-  ctx.shadowColor = 'rgba(80,56,30,0.3)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 3;
-  chamfer(x, y, w, h, c);
-  const g = ctx.createLinearGradient(0, y, 0, y + h);
+  const sc = 1 - 0.035 * p;
+  ctx.translate(x + w / 2, y + h / 2); ctx.scale(sc, sc); ctx.translate(-(x + w / 2), -(y + h / 2));
+  // 底座（厚度）
+  ctx.save();
+  ctx.shadowColor = 'rgba(40,20,8,0.35)'; ctx.shadowBlur = 8 - p * 4; ctx.shadowOffsetY = 3 - p * 2;
+  chamfer(x, y + depth, w, fh, c); ctx.fillStyle = base; ctx.fill();
+  ctx.restore();
+  // 面
+  const fy = y + dy;
+  chamfer(x, fy, w, fh, c);
+  const g = ctx.createLinearGradient(0, fy, 0, fy + fh);
   g.addColorStop(0, a); g.addColorStop(1, b);
   ctx.fillStyle = g; ctx.fill();
+  ctx.save(); chamfer(x, fy, w, fh, c); ctx.clip();
+  const hl = ctx.createLinearGradient(0, fy, 0, fy + fh * 0.55);
+  hl.addColorStop(0, 'rgba(255,255,255,' + (style === 'ghost' ? 0.6 : 0.32) + ')'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = hl; ctx.fillRect(x, fy, w, fh * 0.55);
   ctx.restore();
-  // 顶部高光
-  ctx.save(); chamfer(x, y, w, h, c); ctx.clip();
-  const hl = ctx.createLinearGradient(0, y, 0, y + h * 0.5);
-  hl.addColorStop(0, 'rgba(255,255,255,0.35)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = hl; ctx.fillRect(x, y, w, h * 0.5);
-  ctx.restore();
-  chamfer(x + 0.5, y + 0.5, w - 1, h - 1, c);
-  ctx.lineWidth = 1.2; ctx.strokeStyle = enabled ? (style === 'ghost' ? C.line : 'rgba(70,30,14,0.55)') : 'rgba(120,100,80,0.4)'; ctx.stroke();
-  // 两侧小菱形
-  if (w > 140) {
-    ctx.fillStyle = enabled ? (style === 'ghost' ? C.crimson : 'rgba(255,240,220,0.85)') : '#a89c8a';
-    [x + 18, x + w - 18].forEach((cx) => {
-      const cy = y + h / 2;
-      ctx.beginPath(); ctx.moveTo(cx, cy - 4); ctx.lineTo(cx + 4, cy); ctx.lineTo(cx, cy + 4); ctx.lineTo(cx - 4, cy); ctx.closePath(); ctx.fill();
-    });
+  chamfer(x + 0.75, fy + 0.75, w - 1.5, fh - 1.5, c);
+  ctx.lineWidth = 1.6;
+  ctx.strokeStyle = enabled ? metal(style === 'ghost' ? 'bronze' : 'gold', x, fy, x + w * 0.4, fy + fh) : 'rgba(140,124,104,0.6)';
+  ctx.stroke();
+  if (fh > 34) {
+    chamfer(x + 4, fy + 4, w - 8, fh - 8, Math.max(0, c - 3));
+    ctx.lineWidth = 0.7; ctx.strokeStyle = style === 'ghost' ? 'rgba(154,106,42,0.35)' : 'rgba(255,230,180,0.4)'; ctx.stroke();
   }
-  text(label, x + w / 2, y + h / 2 + 1, size, fg, 'center', true, SERIF);
+  if (w > 140 && enabled) {
+    const orn = style === 'ghost' ? 'rgba(154,106,42,0.7)' : 'rgba(255,226,160,0.8)';
+    [x + 16, x + w - 16].forEach((cx) => { diamond(cx, fy + fh / 2, 3.5, orn); });
+  }
+  ctx.save();
+  if (style !== 'ghost' && enabled) { ctx.shadowColor = 'rgba(50,10,4,0.6)'; ctx.shadowBlur = 2; ctx.shadowOffsetY = 1; }
+  text(label, x + w / 2, fy + fh / 2 + 1, size, fg, 'center', true, SERIF);
+  ctx.restore();
+  ctx.restore();
   if (enabled) hit(x, y, w, h, onTap, label);
 }
 /** 等比画进框里；bottom=true 时脚底贴住框底（立绘用） */
@@ -293,7 +427,7 @@ function icon(key: string, emoji: string, cx: number, cy: number, fontSize: numb
 /** 圆形头像 + 金环 */
 function avatar(key: string, emoji: string, cx: number, cy: number, r: number, ring = C.gold) {
   const im = img('avatar_' + key);
-  ctx.beginPath(); ctx.arc(cx, cy, r + 2, 0, Math.PI * 2); ctx.fillStyle = ring; ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, cy, r + 2.5, 0, Math.PI * 2); ctx.fillStyle = ring === C.gold ? metal('gold', cx - r, cy - r, cx + r, cy + r) : ring; ctx.fill();
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fillStyle = '#e9dfc8'; ctx.fill();
   if (!im) { text(emoji, cx, cy, r * 1.2, '#000', 'center'); return; }
   ctx.save();
@@ -382,42 +516,115 @@ function paperScene() {
 }
 
 function muteButton(x: number, y: number) {
-  ctx.beginPath(); ctx.arc(x, y, 14, 0, Math.PI * 2); ctx.fillStyle = 'rgba(252,247,235,0.92)'; ctx.fill();
-  ctx.lineWidth = 1; ctx.strokeStyle = C.line; ctx.stroke();
-  text(muted ? '🔇' : '🔊', x, y + 1, 13, '#fff', 'center');
+  ctx.save();
+  ctx.shadowColor = 'rgba(30,16,8,0.35)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 2;
+  ctx.beginPath(); ctx.arc(x, y, 15, 0, Math.PI * 2); ctx.fillStyle = metal('gold', x - 15, y - 15, x + 15, y + 15); ctx.fill();
+  ctx.restore();
+  ctx.beginPath(); ctx.arc(x, y, 13, 0, Math.PI * 2);
+  const g = ctx.createLinearGradient(0, y - 13, 0, y + 13); g.addColorStop(0, '#4a3328'); g.addColorStop(1, '#1d130e');
+  ctx.fillStyle = g; ctx.fill();
+  text(muted ? '🔇' : '🔊', x, y + 1, 12, '#fff', 'center');
   hit(x - 18, y - 18, 36, 36, toggleMute);
 }
 
+// ---------- 粮草动画：数字滚动 + 收入飞向顶部 ----------
+let shownCoins = -1;
+let inflight = 0;
+let coinPulse = -9;
+interface Fly { x0: number; y0: number; v: number; t0: number; done: boolean; }
+let flies: Fly[] = [];
+const HUD_Y = SAFE_TOP + 2, HUD_H = 56;
+const GRAIN = { x: W - PAD - 108, y: HUD_Y + HUD_H / 2 };
+function tickCoins(dt: number) {
+  const target = game.coins - inflight;
+  if (shownCoins < 0 || game.mode === 'title') { shownCoins = game.coins; return; }
+  const d = target - shownCoins;
+  if (Math.abs(d) < 0.5) shownCoins = target;
+  else shownCoins += d * Math.min(1, dt * 7) + Math.sign(d) * Math.min(Math.abs(d), dt * 20);
+}
+function drawFlies() {
+  flies.forEach((f) => {
+    const t = (clock - f.t0) / 0.6;
+    if (t < 0) return;
+    if (t >= 1) {
+      if (!f.done) { f.done = true; inflight -= f.v; coinPulse = clock; }
+      return;
+    }
+    const e = t * t;
+    // 往上抛一点再飞过去
+    const cx = (f.x0 + GRAIN.x) / 2, cy = Math.min(f.y0, GRAIN.y) - 60;
+    const x = (1 - e) * (1 - e) * f.x0 + 2 * (1 - e) * e * cx + e * e * GRAIN.x;
+    const y = (1 - e) * (1 - e) * f.y0 + 2 * (1 - e) * e * cy + e * e * GRAIN.y;
+    const r = 8 - t * 3;
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,190,70,0.95)'; ctx.shadowBlur = 14;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fillStyle = metal('gold', x - r, y - r, x + r, y + r); ctx.fill();
+    ctx.restore();
+    ctx.beginPath(); ctx.arc(x, y, r * 0.55, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,250,225,0.9)'; ctx.fill();
+  });
+  flies = flies.filter((f) => !f.done);
+}
+
 function drawHUD() {
-  const y = SAFE_TOP, h = TOP_H - 6;
-  panel(PAD, y, W - PAD * 2, h, { c: 10 });
+  const y = HUD_Y, h = HUD_H;
   // 左：周数和天数
-  goldText('第' + game.week + '周', PAD + 46, y + 20, 19);
+  const lw = 82;
+  lacquer(PAD, y, lw, h, 12);
+  metalText('第' + game.week + '周', PAD + lw / 2, y + 21, 19);
   const day = Math.min(game.day, DAYS_PER_WEEK);
   for (let d = 1; d <= DAYS_PER_WEEK; d++) {
-    diamond(PAD + 46 + (d - 4) * 10, y + 42, d === day ? 4 : 2.8, d < day ? C.gold : d === day ? C.crimson : 'rgba(90,64,40,0.2)');
+    const cx = PAD + lw / 2 + (d - 4) * 9.5;
+    if (d === day) { ctx.save(); ctx.shadowColor = 'rgba(255,120,80,0.9)'; ctx.shadowBlur = 6; diamond(cx, y + 41, 4.2, '#ff8a5c'); ctx.restore(); }
+    else diamond(cx, y + 41, 2.8, d < day ? C.brass : 'rgba(246,231,196,0.22)');
   }
-  if (game.endless) text('无尽', PAD + 46, y + h + 8, 10, C.warn, 'center', true);
-  // 右：粮草
-  const rx = W - PAD - 104;
-  text('🌾', rx + 14, y + 21, 18, '#000', 'center');
-  goldText(String(game.coins), rx + 28, y + 21, 21, 'left', FONT);
-  text('今晚 +' + game.previewIncome(), rx + 28, y + 42, 10.5, C.muted, 'left');
+  if (game.endless) text('无尽', PAD + lw / 2, y + h + 9, 10, C.warn, 'center', true);
+  // 右：粮草（金色徽章 + 滚动数字）
+  const rx = W - PAD - 104, rw = 104;
+  lacquer(rx, y, rw, h, 12);
+  const pk = Math.max(0, 1 - (clock - coinPulse) / 0.3);
+  const mr = 19 + pk * 3;
+  ctx.save(); ctx.shadowColor = 'rgba(255,190,80,' + (0.4 + pk * 0.5) + ')'; ctx.shadowBlur = 8 + pk * 10;
+  ctx.beginPath(); ctx.arc(GRAIN.x, GRAIN.y, mr, 0, Math.PI * 2); ctx.fillStyle = metal('gold', GRAIN.x - mr, GRAIN.y - mr, GRAIN.x + mr, GRAIN.y + mr); ctx.fill();
+  ctx.restore();
+  ctx.beginPath(); ctx.arc(GRAIN.x, GRAIN.y, mr - 3.5, 0, Math.PI * 2);
+  const ig = ctx.createRadialGradient(GRAIN.x, GRAIN.y - 4, 2, GRAIN.x, GRAIN.y, mr);
+  ig.addColorStop(0, '#fffaf0'); ig.addColorStop(1, '#e9d4a8');
+  ctx.fillStyle = ig; ctx.fill();
+  text('🌾', GRAIN.x, GRAIN.y + 1, 17 + pk * 3, '#000', 'center');
+  const shown = Math.round(shownCoins < 0 ? game.coins : shownCoins);
+  metalText(String(shown), rx + 26, y + 22, 22 + pk * 3, 'left', FONT);
+  text('今晚 +' + game.previewIncome(), rx + 26, y + 42, 10.5, C.lacqMuted, 'left');
   // 中：诸侯与军粮进度
-  const mx = PAD + 92, mw = rx - mx - 8;
+  const mx = PAD + lw + 6, mw = GRAIN.x - 24 - mx;
+  lacquer(mx, y, mw, h, 12);
   const rent = game.rentOf(), lord = game.lord;
-  avatar(lord.art, lord.icon, mx + 12, y + h / 2, 11, C.crimson);
+  avatar(lord.art, lord.icon, mx + 22, y + h / 2, 14, '#c9452f');
   const left = DAYS_PER_WEEK - day + 1;
-  text(lord.name + ' 收军粮', mx + 28, y + 17, 11, C.cream, 'left', true);
-  text('还剩' + left + '天', mx + mw, y + 17, 11, game.coins >= rent ? C.jade : C.warn, 'right', true);
-  const bx = mx + 28, bw = mw - 28, bh = 12, by = y + 32;
-  fillRR(bx, by, bw, bh, 6, 'rgba(90,64,40,0.14)');
-  const ok = game.coins >= rent;
-  const f = Math.max(0.03, Math.min(1, game.coins / Math.max(1, rent)));
-  const pg = ctx.createLinearGradient(bx, 0, bx + bw, 0);
-  if (ok) { pg.addColorStop(0, '#4f9e86'); pg.addColorStop(1, '#8cc9b2'); } else { pg.addColorStop(0, '#b8432f'); pg.addColorStop(1, '#e08a72'); }
-  fillRR(bx, by, bw * f, bh, 6, pg as any);
-  shadowText(game.coins + ' / ' + rent, bx + bw / 2, by + bh / 2 + 0.5, 9, C.ink, 'center', true);
+  const ok = shown >= rent;
+  text(lord.name, mx + 42, y + 17, 12, C.lacq, 'left', true, SERIF);
+  ctx.font = 'bold 10px ' + FONT;
+  const chip = '还剩' + left + '天';
+  const cw = ctx.measureText(chip).width + 12;
+  fillRR(mx + mw - 8 - cw, y + 9, cw, 16, 8, ok ? 'rgba(63,143,120,0.9)' : 'rgba(194,58,43,0.92)');
+  text(chip, mx + mw - 8 - cw / 2, y + 17.5, 10, '#fff6e6', 'center', true);
+  const bx = mx + 42, bw = mw - 50, bh = 13, by = y + 31;
+  rr(bx, by, bw, bh, 6.5); ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fill();
+  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(226,188,106,0.55)'; ctx.stroke();
+  const f = Math.max(0.04, Math.min(1, shown / Math.max(1, rent)));
+  const pg = ctx.createLinearGradient(0, by, 0, by + bh);
+  if (ok) { pg.addColorStop(0, '#8fe0c0'); pg.addColorStop(0.5, '#3f9e80'); pg.addColorStop(1, '#2a7360'); }
+  else { pg.addColorStop(0, '#ffb08f'); pg.addColorStop(0.5, '#d4553a'); pg.addColorStop(1, '#9a2c1c'); }
+  ctx.save(); rr(bx, by, bw, bh, 6.5); ctx.clip();
+  rr(bx + 1, by + 1, (bw - 2) * f, bh - 2, 5.5); ctx.fillStyle = pg; ctx.fill();
+  // 进度条上流动的光
+  const sx = bx + ((clock * 50) % (bw + 40)) - 20;
+  const sg = ctx.createLinearGradient(sx - 16, 0, sx + 16, 0);
+  sg.addColorStop(0, 'rgba(255,255,255,0)'); sg.addColorStop(0.5, 'rgba(255,255,255,0.35)'); sg.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = sg; ctx.fillRect(bx, by, (bw - 2) * f, bh);
+  ctx.restore();
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 2;
+  text(shown + ' / ' + rent, bx + bw / 2, by + bh / 2 + 0.5, 9.5, '#fff8e8', 'center', true);
+  ctx.restore();
 }
 
 function drawBoard() {
@@ -479,17 +686,19 @@ function drawBoard() {
         lift = Math.sin(Math.PI * t) * CELL * 0.35;
         if (t >= 1) delete hops[id];
       }
-      if (!hop) {
-        ctx.beginPath(); ctx.ellipse(x + CELL / 2, y + CELL * 0.84, CELL * 0.28, CELL * 0.07, 0, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fill();
-      }
+      // 地面阴影（跳起来时变小变淡）
+      const sk = 1 - Math.min(0.6, lift / CELL);
+      ctx.beginPath(); ctx.ellipse(x + CELL / 2 + ox, y + CELL * 0.84 + oy, CELL * 0.28 * sk, CELL * 0.07 * sk, 0, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0,0,0,' + (0.28 * sk) + ')'; ctx.fill();
       const pt = clock - (popAt[i] || -9);
       const k = pt < 0.35 ? popScale(pt / 0.35) : 1;
       const bob = hop ? 0 : Math.sin(clock * 2 + i) * 0.8;
       moving.push(() => icon(cell.c!.type, CREATURES[cell.c!.type].icon, x + CELL / 2 + ox, y + CELL / 2 + bob + oy - lift + (1 - k) * 6, Math.floor(CELL * 0.5 * k), CELL * 0.84 * k));
       if (!hop) moving.pop()!();
+      ctx.save(); ctx.translate(ox, oy - lift);
       if (cell.c.bonus > 0) {
-        diamond(x + 11, y + 11, 8, C.violet);
+        diamond(x + 11, y + 11, 9, metal('gold', x + 2, y + 2, x + 20, y + 20) as any);
+        diamond(x + 11, y + 11, 7.2, '#7a4fa0');
         text('+' + cell.c.bonus, x + 11, y + 11.5, 8, '#fff', 'center', true);
       }
       if (cell.c.last !== null) {
@@ -501,6 +710,7 @@ function drawBoard() {
         ctx.lineWidth = 0.8; ctx.strokeStyle = C.line; ctx.stroke();
         text(s, x + CELL - 3 - bw / 2, y + CELL - 9.5, 10, C.crimson, 'center', true);
       }
+      ctx.restore();
     }
     if (game.pendingReplace === i && sel) {
       ctx.fillStyle = 'rgba(20,10,20,0.45)'; ctx.fillRect(x + 2, y + 2, CELL - 4, CELL - 4);
@@ -526,7 +736,9 @@ function drawInfo() {
   panel(x + 26, y, w - 26, h, { c: 8, corners: false });
   const hero = img('avatar_heroine') || null;
   const ar = 27;
-  ctx.beginPath(); ctx.arc(x + ar + 2, y + h / 2, ar + 2.5, 0, Math.PI * 2); ctx.fillStyle = C.gold; ctx.fill();
+  ctx.save(); ctx.shadowColor = 'rgba(30,16,8,0.4)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 2;
+  ctx.beginPath(); ctx.arc(x + ar + 2, y + h / 2, ar + 3.5, 0, Math.PI * 2); ctx.fillStyle = metal('gold', x, y, x + ar * 2, y + h); ctx.fill();
+  ctx.restore();
   ctx.beginPath(); ctx.arc(x + ar + 2, y + h / 2, ar, 0, Math.PI * 2); ctx.fillStyle = '#e9dfc8'; ctx.fill();
   if (hero) {
     ctx.save(); ctx.beginPath(); ctx.arc(x + ar + 2, y + h / 2, ar, 0, Math.PI * 2); ctx.clip();
@@ -540,46 +752,118 @@ function drawInfo() {
 /** 每天早上弹出的选卡窗：三张大卡居中，下方刷新 / 跳过 */
 let cardModal = true;
 let dayKey = '';
+let modalAt = -9;
+/** 卡框金属：动物按稀有度（铜/银/金），地形玉，道具铜 */
+function cardMetal(card: Card): Metal {
+  if (card.kind === 'terrain') return 'jade';
+  if (card.kind === 'item') return 'bronze';
+  return (['bronze', 'bronze', 'silver', 'gold'] as Metal[])[CREATURES[card.type].r];
+}
+function cardTint(card: Card): string {
+  if (card.kind === 'creature') { const f = CREATURES[card.type].fam; return f ? FAMILIES[f].color : '#c8b48a'; }
+  return card.kind === 'terrain' ? '#7cc9ab' : '#e0a95a';
+}
+function easeOutBack(t: number) { const c = 1.4; const u = t - 1; return 1 + (c + 1) * u * u * u + c * u * u; }
 function drawCardModal() {
   const n = game.choices.length;
-  dim(0.62);
+  const since = clock - modalAt;
+  dim(0.62 * Math.min(1, since / 0.2));
   hit(0, 0, W, BTN_Y - 4, () => { cardModal = false; }, '收起');
   const gap = 8;
   const cw = Math.floor((W - PAD * 2 - gap * (n - 1)) / n);
   const ch = Math.min(H * 0.52, 380);
-  const cy = Math.max(SAFE_TOP + TOP_H + 50, (H - ch) / 2 - 30);
-  goldText(game.picksLeft > 1 ? '今天还能选 ' + game.picksLeft + ' 张' : '选一张卡', W / 2, cy - 26, 24);
-  ornamentLine(W / 2, cy - 26, W * 0.46, 92);
+  const cy = Math.max(SAFE_TOP + HUD_H + 56, (H - ch) / 2 - 30);
+  const tt = Math.min(1, since / 0.3);
+  ctx.save(); ctx.globalAlpha = tt;
+  ribbon(W / 2, cy - 50 + (1 - tt) * -10, 168, 36, game.picksLeft > 1 ? '还能选 ' + game.picksLeft + ' 张' : '选一张卡', 19);
+  ctx.restore();
   game.choices.forEach((card, k) => {
-    const x = PAD + k * (cw + gap), y = cy;
-    const info = cardInfo(card);
-    const col = cardColor(card);
-    panel(x, y, cw, ch, { c: 10, corners: false, fill: 'rgba(251,246,234,0.98)' });
-    // 顶部名字条
-    chamfer(x + 4, y + 4, cw - 8, 30, 6);
-    const hg = ctx.createLinearGradient(0, y + 4, 0, y + 34);
-    hg.addColorStop(0, col); hg.addColorStop(1, 'rgba(60,40,20,0.25)');
-    ctx.fillStyle = hg; ctx.fill();
-    text(info.name, x + cw / 2, y + 20, 15, '#fff', 'center', true, SERIF);
-    // 画面
-    const ah = Math.min(ch * 0.36, cw * 1.05);
-    const rg = ctx.createRadialGradient(x + cw / 2, y + 38 + ah / 2, 4, x + cw / 2, y + 38 + ah / 2, cw * 0.6);
-    rg.addColorStop(0, 'rgba(200,180,140,0.28)'); rg.addColorStop(1, 'rgba(200,180,140,0)');
-    ctx.fillStyle = rg; ctx.fillRect(x, y + 38, cw, ah);
-    icon(cardArtKey(card), info.icon || '⬛', x + cw / 2, y + 38 + ah / 2, 40, Math.min(cw - 10, ah - 4));
-    // 标签 + 收益
-    chamfer(x + cw / 2 - 26, y + 40 + ah, 52, 17, 5); ctx.fillStyle = 'rgba(60,44,30,0.82)'; ctx.fill();
-    text(info.tag, x + cw / 2, y + 48.5 + ah, 10, col, 'center', true);
-    // 规则：大字，数字高亮
-    const ry = y + 68 + ah;
-    fillRR(x + 6, ry - 6, cw - 12, ch - (ry - y) - 2, 6, 'rgba(120,90,50,0.07)');
-    richWrap(info.desc, x + cw / 2, ry + 10, cw - 20, 13, 19, Math.max(2, Math.floor((ch - (ry - y) - 14) / 19)));
-    hit(x, y, cw, ch, () => pickCard(k), info.name);
+    const t = Math.max(0, Math.min(1, (since - 0.05 - k * 0.07) / 0.38));
+    if (t <= 0) return;
+    const e = easeOutBack(t);
+    const x = PAD + k * (cw + gap), y = cy + (1 - e) * 70;
+    ctx.save(); ctx.globalAlpha = Math.min(1, t * 2.2);
+    drawCard(card, x, y, cw, ch);
+    ctx.restore();
+    hit(x, cy, cw, ch, () => pickCard(k), cardInfo(card).name);
   });
-  const by = cy + ch + 18, bw = (W - PAD * 2 - 12) / 2;
-  button('🔄 刷新 🌾' + game.rerollCost, PAD, by, bw, 46, () => game.reroll(), 'violet', game.canReroll(), 15);
-  button('跳过', PAD + bw + 12, by, bw, 46, () => { game.skipCards(); }, 'ghost', true, 15);
-  shadowText('点卡牌选择，再点牧场格子放置；点空白处先看看牧场', W / 2, by + 66, 12, C.cream, 'center');
+  const by = cy + ch + 16, bw = (W - PAD * 2 - 12) / 2;
+  const bt = Math.min(1, Math.max(0, (since - 0.25) / 0.25));
+  ctx.save(); ctx.globalAlpha = bt;
+  button('🔄 刷新 🌾' + game.rerollCost, PAD, by, bw, 48, () => game.reroll(), 'violet', game.canReroll(), 15);
+  button('跳过', PAD + bw + 12, by, bw, 48, () => { game.skipCards(); }, 'ghost', true, 15);
+  text('动物会自动上场；地形和道具选好后再点格子', W / 2, by + 68, 12, C.lacq, 'center');
+  ctx.restore();
+}
+/** 一张卡：金属卡框 + 漆色名牌 + 家族色画框 + 象牙说明区 */
+function drawCard(card: Card, x: number, y: number, cw: number, ch: number) {
+  const info = cardInfo(card);
+  const m = cardMetal(card);
+  const tint = cardTint(card);
+  const rare = card.kind === 'creature' ? CREATURES[card.type].r : 0;
+  ctx.save();
+  ctx.shadowColor = rare === 3 ? 'rgba(255,200,90,0.75)' : 'rgba(30,16,8,0.45)'; ctx.shadowBlur = rare === 3 ? 18 : 12; ctx.shadowOffsetY = rare === 3 ? 0 : 5;
+  chamfer(x, y, cw, ch, 10); ctx.fillStyle = metal(m, x, y, x + cw, y + ch); ctx.fill();
+  ctx.restore();
+  const b = 3.5;
+  chamfer(x + b, y + b, cw - b * 2, ch - b * 2, 8);
+  const pg = ctx.createLinearGradient(0, y, 0, y + ch);
+  pg.addColorStop(0, '#fffaf0'); pg.addColorStop(1, '#f1e4c8');
+  ctx.fillStyle = pg; ctx.fill();
+  // 画框：家族色光晕
+  const ax = x + b + 4, ay = y + 34, aw = cw - (b + 4) * 2, ah = Math.min(ch * 0.38, cw * 1.05);
+  ctx.save(); rr(ax, ay, aw, ah, 6); ctx.clip();
+  const rg = ctx.createRadialGradient(ax + aw / 2, ay + ah * 0.55, 4, ax + aw / 2, ay + ah * 0.55, aw * 0.75);
+  rg.addColorStop(0, '#fffdf6'); rg.addColorStop(0.55, tint + '55'); rg.addColorStop(1, tint + 'aa');
+  ctx.fillStyle = rg; ctx.fillRect(ax, ay, aw, ah);
+  // 淡淡的云纹
+  ctx.globalAlpha = 0.18; cloudCorner(ax + 2, ay + ah - 2, 8, -Math.PI / 2, '#fff'); cloudCorner(ax + aw - 2, ay + 2, 8, Math.PI / 2, '#fff'); ctx.globalAlpha = 1;
+  ctx.restore();
+  rr(ax + 0.5, ay + 0.5, aw - 1, ah - 1, 6); ctx.lineWidth = 1; ctx.strokeStyle = metal(m, ax, ay, ax + aw, ay + ah); ctx.stroke();
+  icon(cardArtKey(card), info.icon || '⬛', ax + aw / 2, ay + ah / 2 + 2, 40, Math.min(aw - 6, ah - 6));
+  // 名牌（压在卡框上沿）
+  const nh = 28;
+  chamfer(x + 8, y + 6, cw - 16, nh, 6);
+  const ng = ctx.createLinearGradient(0, y + 6, 0, y + 6 + nh);
+  ng.addColorStop(0, '#4a3328'); ng.addColorStop(1, '#1f140f');
+  ctx.fillStyle = ng; ctx.fill();
+  ctx.lineWidth = 1.2; ctx.strokeStyle = metal(m, x, y, x + cw, y + nh); ctx.stroke();
+  metalText(info.name, x + cw / 2, y + 6 + nh / 2 + 1, 15, 'center', SERIF, m === 'jade' ? 'jade' : m === 'silver' ? 'silver' : 'gold');
+  // 稀有度宝石
+  if (card.kind === 'creature') {
+    const gems = rare;
+    for (let g = 0; g < gems; g++) {
+      const gx = x + cw / 2 + (g - (gems - 1) / 2) * 11;
+      diamond(gx, ay + ah + 1, 4.5, metal(m, gx - 4, ay + ah - 4, gx + 4, ay + ah + 4) as any);
+      diamond(gx, ay + ah + 1, 2.2, rare === 3 ? '#ff6b4a' : rare === 2 ? '#7fc7ff' : '#b5875a');
+    }
+  }
+  // 标签
+  const ty = ay + ah + 19;
+  ctx.font = 'bold 10px ' + FONT;
+  const tw = Math.min(cw - 12, ctx.measureText(info.tag).width + 18);
+  chamfer(x + cw / 2 - tw / 2, ty - 8.5, tw, 17, 5);
+  ctx.fillStyle = tint + '33'; ctx.fill(); ctx.lineWidth = 0.8; ctx.strokeStyle = tint; ctx.stroke();
+  text(info.tag, x + cw / 2, ty + 0.5, 10, C.cream, 'center', true);
+  // 分隔纹
+  const dy = ty + 16;
+  ctx.strokeStyle = 'rgba(154,106,42,0.45)'; ctx.lineWidth = 0.8;
+  ctx.beginPath(); ctx.moveTo(x + 14, dy); ctx.lineTo(x + cw / 2 - 6, dy); ctx.moveTo(x + cw / 2 + 6, dy); ctx.lineTo(x + cw - 14, dy); ctx.stroke();
+  diamond(x + cw / 2, dy, 2.6, C.crimson);
+  const ry = dy + 14;
+  richWrap(info.desc, x + cw / 2, ry, cw - 20, 13, 19, Math.max(2, Math.floor((y + ch - 10 - ry) / 19) + 1));
+  // 金卡流光
+  if (rare === 3) {
+    ctx.save(); chamfer(x + b, y + b, cw - b * 2, ch - b * 2, 8); ctx.clip();
+    const p = (clock % 2.6) / 1.2;
+    if (p < 1) {
+      const sx = x - cw + p * cw * 3;
+      const sg = ctx.createLinearGradient(sx, y, sx + cw * 0.5, y + ch * 0.4);
+      sg.addColorStop(0, 'rgba(255,240,200,0)'); sg.addColorStop(0.5, 'rgba(255,240,200,0.45)'); sg.addColorStop(1, 'rgba(255,240,200,0)');
+      ctx.fillStyle = sg; ctx.fillRect(x, y, cw, ch);
+    }
+    ctx.restore();
+  }
 }
 /** 把说明里的数字和关键词标成金色 */
 function richWrap(s: string, cx: number, y: number, maxW: number, size: number, lineH: number, maxLines: number) {
@@ -613,10 +897,31 @@ function pickCard(k: number) {
   const card = game.choices[k];
   if (!card) return;
   game.tapCard(k);
+  if (card.kind === 'creature') return; // 动物已经自动上场或进了候选池
   if (card.kind === 'item' && ITEMS[card.type].target === 'none') { game.tapCard(k); return; }
   cardModal = false;
 }
 /** 选好卡、还没放下时，在底部显示「换一张」 */
+/** 候选池：牧场满了时等着上场的动物 */
+function drawPool() {
+  const pool = game.pool;
+  if (game.mode !== 'play' && game.mode !== 'rent') return;
+  if (!pool.length) return;
+  const x = PAD, y = INFO_Y - 46, h = 36;
+  const show = Math.min(pool.length, 5);
+  const w = 62 + show * 30 + (pool.length > show ? 26 : 0);
+  panel(x, y, w, h, { c: 6, corners: false });
+  text('候选池', x + 10, y + h / 2, 11, C.cream, 'left', true, SERIF);
+  for (let k = 0; k < show; k++) {
+    const c = pool[k];
+    icon(c.type, CREATURES[c.type].icon, x + 66 + k * 30, y + h / 2, 18, 28);
+  }
+  if (pool.length > show) text('+' + (pool.length - show), x + 66 + show * 30 + 2, y + h / 2, 11, C.crimson, 'left', true);
+  hit(x, y, w, h, () => {
+    game.info = '候选池（' + pool.length + '/' + POOL_MAX + '）：' + pool.map((c) => CREATURES[c.type].name).join('、') + '。明早会和场上动物一起随机上场。';
+  }, '候选池');
+}
+
 function drawPickBar() {
   if (game.mode !== 'play' || !game.choices.length) return;
   if (game.selected >= 0) {
@@ -627,7 +932,10 @@ function drawPickBar() {
 }
 
 function dim(alpha = 0.5) {
-  ctx.fillStyle = 'rgba(58,44,30,' + alpha * 0.75 + ')';
+  const a = Math.min(0.85, alpha * 0.95);
+  const g = ctx.createRadialGradient(W / 2, H * 0.45, W * 0.2, W / 2, H * 0.45, H * 0.75);
+  g.addColorStop(0, 'rgba(48,32,22,' + a * 0.85 + ')'); g.addColorStop(1, 'rgba(22,12,8,' + Math.min(0.92, a * 1.2) + ')');
+  ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
 }
 
@@ -649,28 +957,31 @@ function drawRent() {
   else text(lord.icon, W / 2, boxY - 90, 90, '#000', 'center');
   panel(PAD, boxY, W - PAD * 2, boxH, { c: 12 });
   const last = game.week === game.weeks && !game.endless;
-  chamfer(PAD + 14, boxY - 18, 132, 34, 8);
-  const ng = ctx.createLinearGradient(0, boxY - 18, 0, boxY + 16);
-  ng.addColorStop(0, '#d8566a'); ng.addColorStop(1, '#8c2032');
-  ctx.fillStyle = ng; ctx.fill(); ctx.lineWidth = 1; ctx.strokeStyle = C.gold; ctx.stroke();
-  text((last ? '最终关 · ' : '') + lord.name, PAD + 80, boxY - 1, 16, '#fff6e6', 'center', true, SERIF);
+  const nm = (last ? '最终关 · ' : '') + lord.name;
+  ctx.font = 'bold 17px ' + SERIF;
+  const nw = Math.max(110, ctx.measureText(nm).width + 40);
+  ribbon(PAD + 30 + nw / 2, boxY - 20, nw, 34, nm, 17);
   wrap('「' + lord.line + '」', PAD + 20, boxY + 36, W - PAD * 2 - 40, 15, C.cream, 22, 2);
   // 军粮对比
-  const by = boxY + 96;
-  text('第' + game.week + '周军粮', PAD + 20, by, 12, C.muted);
-  goldText(String(rent), PAD + 20, by + 22, 22, 'left', FONT);
-  text('你的粮草', W - PAD - 20, by, 12, C.muted, 'right');
-  ctx.save(); text(String(game.coins), W - PAD - 20, by + 22, 22, ok ? C.ok : C.warn, 'right', true); ctx.restore();
+  const by = boxY + 86, pw = (W - PAD * 2 - 40 - 36) / 2;
+  lacquer(PAD + 20, by, pw, 50, 10);
+  text('第' + game.week + '周军粮', PAD + 20 + pw / 2, by + 14, 11, C.lacqMuted, 'center');
+  metalText(String(rent), PAD + 20 + pw / 2, by + 34, 21, 'center', FONT, 'red');
+  lacquer(W - PAD - 20 - pw, by, pw, 50, 10);
+  text('你的粮草', W - PAD - 20 - pw / 2, by + 14, 11, C.lacqMuted, 'center');
+  metalText(String(game.coins), W - PAD - 20 - pw / 2, by + 34, 21, 'center', FONT, ok ? 'jade' : 'red');
+  metalText(ok ? '≥' : '<', W / 2, by + 25, 22, 'center', FONT, ok ? 'jade' : 'red');
   button(ok ? '交出军粮' : '交不起……', PAD + 20, boxY + boxH - 66, W - PAD * 2 - 40, 50, () => game.payRent(), ok ? 'gold' : 'ghost', true, 18);
 }
 
 /** 三选一招募伙伴：三张竖卡，上半是立绘 */
+let relicAt = -1;
 function drawRelic() {
   drawBackground(0.55);
+  dim(0.25);
   const top = SAFE_TOP + 4;
-  goldText('招募伙伴', W / 2, top + 18, 26);
-  ornamentLine(W / 2, top + 18, W * 0.46, 70);
-  text(game.lord.name + '满意地走了，有人想加入你的牧场', W / 2, top + 48, 13, C.muted, 'center');
+  ribbon(W / 2, top + 2, 168, 38, '招募伙伴', 21);
+  shadowText(game.lord.name + '满意地走了，有人想加入你的牧场', W / 2, top + 58, 13, C.cream, 'center');
   const gap = 8;
   const cw = Math.floor((W - PAD * 2 - gap * 2) / 3);
   const avail = H - top - 120 - SAFE_BOTTOM;
@@ -679,7 +990,11 @@ function drawRelic() {
   game.relicChoices.forEach((k, idx) => {
     const r = RELICS[k];
     const x = PAD + idx * (cw + gap);
-    panel(x, cy, cw, ch, { c: 10, corners: false, fill: 'rgba(251,246,234,0.98)' });
+    const since = clock - (relicAt < 0 ? (relicAt = clock) : relicAt);
+    const t = Math.max(0, Math.min(1, (since - idx * 0.08) / 0.4));
+    if (t <= 0) return;
+    ctx.save(); ctx.globalAlpha = Math.min(1, t * 2); ctx.translate(0, (1 - easeOutBack(t)) * 80);
+    panel(x, cy, cw, ch, { c: 10, corners: false, frame: 'gold', glow: 'rgba(255,200,110,' + (0.35 + 0.2 * Math.sin(clock * 2 + idx)) + ')' });
     const ph = ch - 118;
     ctx.save(); chamfer(x + 3, cy + 3, cw - 6, ph, 8); ctx.clip();
     const bg = ctx.createLinearGradient(0, cy, 0, cy + ph);
@@ -692,9 +1007,14 @@ function drawRelic() {
     fade.addColorStop(0, 'rgba(251,246,234,0)'); fade.addColorStop(1, 'rgba(251,246,234,1)');
     ctx.fillStyle = fade; ctx.fillRect(x, cy + ph * 0.7, cw, ph * 0.3 + 4);
     ctx.restore();
-    goldText(r.name, x + cw / 2, cy + ph + 2, 19);
-    text('「' + r.title + '」', x + cw / 2, cy + ph + 26, 11, '#8a5a7e', 'center', false, SERIF);
-    wrap(r.desc, x + cw / 2, cy + ph + 48, cw - 14, 11, C.muted, 15, 4, 'center');
+    chamfer(x + 8, cy + ph - 12, cw - 16, 28, 6);
+    const ng = ctx.createLinearGradient(0, cy + ph - 12, 0, cy + ph + 16);
+    ng.addColorStop(0, '#4a3328'); ng.addColorStop(1, '#1f140f');
+    ctx.fillStyle = ng; ctx.fill(); ctx.lineWidth = 1.2; ctx.strokeStyle = metal('gold', x, cy + ph - 12, x + cw, cy + ph + 16); ctx.stroke();
+    metalText(r.name, x + cw / 2, cy + ph + 3, 17);
+    text('「' + r.title + '」', x + cw / 2, cy + ph + 30, 11, '#9a3a2a', 'center', true, SERIF);
+    wrap(r.desc, x + cw / 2, cy + ph + 52, cw - 16, 11, C.cream, 15, 4, 'center');
+    ctx.restore();
     hit(x, cy, cw, ch, () => game.chooseRelic(k));
   });
   shadowText('点卡片招募', W / 2, cy + ch + 24, 13, C.gold, 'center', true, SERIF);
@@ -702,38 +1022,48 @@ function drawRelic() {
 
 function drawEnd(win: boolean) {
   dim(0.75);
-  const ph = win ? 330 : 280;
+  const ph = (win ? 330 : 280) + (game.star ? 44 : 0);
   const py = H - SAFE_BOTTOM - ph - 20;
   const who = win ? img('heroine') : img(game.lord.art);
   if (who) drawContain(who, W / 2, py - (H * 0.5) / 2 + 30, W, H * 0.5, true);
   panel(20, py, W - 40, ph, { c: 12 });
   const title = win ? '世外桃源' : game.endless ? '无尽挑战结束' : '牧场失守';
-  goldText(title, W / 2, py + 34, 26);
-  ornamentLine(W / 2, py + 34, W * 0.4, 80);
+  ribbon(W / 2, py - 18, 176, 40, title, 22, win ? 'red' : 'gold');
   const sub = win ? '乱世之中，你的牧场成了世外桃源！'
     : game.endless ? '撑过了 ' + game.weeksSurvived + ' 周，真了不起！'
     : '粮草不够，牧场被' + game.lord.name + '收走了……';
-  text(sub, W / 2, py + 66, 13, C.cream, 'center');
+  text(sub, W / 2, py + 56, 13, C.cream, 'center', false, SERIF);
   // 三格数据
   const stats: [string, string][] = [['撑过', game.weeksSurvived + '周'], ['伙伴', game.relics.length + '位'], ['总收获', String(game.total)]];
   const sw = (W - 80) / 3;
   stats.forEach(([k, v], i) => {
     const sx = 40 + i * sw;
-    text(k, sx + sw / 2, py + 94, 11, C.muted, 'center');
-    goldText(v, sx + sw / 2, py + 116, 19, 'center', FONT);
+    lacquer(sx + 3, py + 84, sw - 6, 48, 10);
+    text(k, sx + sw / 2, py + 97, 10.5, C.lacqMuted, 'center');
+    metalText(v, sx + sw / 2, py + 117, 17, 'center', FONT);
   });
-  text('最好成绩 ' + game.best + ' 周', W / 2, py + 142, 11, C.muted, 'center');
+  text('最好成绩 ' + game.best + ' 周', W / 2, py + 146, 11, C.muted, 'center');
+  let sy = py + 166;
+  if (game.star) {
+    // 最强一只：方便截图炫耀
+    const st = game.star;
+    fillRR(40, sy - 6, W - 80, 40, 8, 'rgba(184,67,47,0.08)');
+    icon(st.type, CREATURES[st.type].icon, 66, sy + 14, 22, 36);
+    text('最强一只', 92, sy + 5, 11, C.muted, 'left');
+    text(CREATURES[st.type].name + ' · 一晚产出 ' + st.v, 92, sy + 23, 15, C.crimson, 'left', true, SERIF);
+    sy += 44;
+  }
   let ax = W / 2 - (game.relics.length - 1) * 13;
-  game.relics.forEach((id) => { avatar(RELICS[id].art, RELICS[id].icon, ax, py + 166, 10); ax += 26; });
+  game.relics.forEach((id) => { avatar(RELICS[id].art, RELICS[id].icon, ax, sy, 10); ax += 26; });
   const bw = W - 96;
-  let by = py + 190;
+  let by = sy + 24;
   if (win) {
     button('继续挑战（无尽模式）', 48, by, bw, 46, () => game.continueEndless(), 'crimson');
     by += 56;
   }
   const canShare = !!wx.shareAppMessage;
   const half = canShare ? (bw - 10) / 2 : bw;
-  button('再来一局', 48, by, half, 46, () => game.newGame(), 'gold');
+  button('再来一局', 48, by, half, 46, () => game.newGame(), win ? 'ghost' : 'gold');
   if (canShare) button('分享战绩', 48 + half + 10, by, half, 46, () => shareResult(), 'violet');
 }
 
@@ -759,7 +1089,15 @@ function drawTitle() {
     ctx.restore();
   } else text('🌸', W / 2, SAFE_TOP + ph / 2, 72, '#000', 'center');
   const ty = SAFE_TOP + ph + 22;
-  goldText(GAME_TITLE, W / 2, ty, 46);
+  metalText(GAME_TITLE, W / 2 - 12, ty, 46, 'center', SERIF);
+  // 朱红印章
+  ctx.font = 'bold 46px ' + SERIF;
+  const sx = W / 2 - 12 + ctx.measureText(GAME_TITLE).width / 2 + 8, sy = ty - 18;
+  ctx.save(); ctx.translate(sx + 15, sy + 18); ctx.rotate(0.06);
+  rr(-15, -18, 30, 36, 3); ctx.fillStyle = '#b8321f'; ctx.fill();
+  rr(-12.5, -15.5, 25, 31, 2); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,236,220,0.8)'; ctx.stroke();
+  text('牧', 0, -6, 12, '#fff2e6', 'center', true, SERIF); text('场', 0, 8, 12, '#fff2e6', 'center', true, SERIF);
+  ctx.restore();
   ornamentLine(W / 2, ty + 34, W * 0.42, 6);
   shadowText('乱世之中，和三国美少女们一起经营牧场', W / 2, ty + 54, 13, C.cream, 'center', false, SERIF);
   if (game.best) text('最好成绩 · 撑过 ' + game.best + ' 周', W / 2, ty + 76, 11, C.gold, 'center');
@@ -775,26 +1113,26 @@ function drawTitle() {
   // 玩法说明收进右上角的小按钮
   muteButton(W - PAD - 16, SAFE_TOP + 16);
   const hx = PAD + 16, hy = SAFE_TOP + 16;
-  ctx.beginPath(); ctx.arc(hx, hy, 14, 0, Math.PI * 2); ctx.fillStyle = 'rgba(252,247,235,0.92)'; ctx.fill();
-  ctx.lineWidth = 1; ctx.strokeStyle = C.line; ctx.stroke();
-  text('?', hx, hy + 1, 15, C.gold, 'center', true);
+  ctx.beginPath(); ctx.arc(hx, hy, 15, 0, Math.PI * 2); ctx.fillStyle = metal('gold', hx - 15, hy - 15, hx + 15, hy + 15); ctx.fill();
+  ctx.beginPath(); ctx.arc(hx, hy, 13, 0, Math.PI * 2); ctx.fillStyle = '#2e1f18'; ctx.fill();
+  metalText('?', hx, hy + 1, 16, 'center', FONT);
   hit(hx - 18, hy - 18, 36, 36, () => { showHelp = !showHelp; }, '玩法');
   if (showHelp) drawHelp();
 }
 let showHelp = false;
 function drawHelp() {
   dim(0.6);
-  const w = W - 48, h = 330, x = 24, y = (H - h) / 2;
+  const w = W - 48, h = 380, x = 24, y = (H - h) / 2;
   panel(x, y, w, h, { c: 12 });
-  goldText('玩法', W / 2, y + 30, 22);
-  ornamentLine(W / 2, y + 30, w * 0.4, 44);
+  ribbon(W / 2, y - 16, 120, 34, '玩法', 19);
   [
     '每天从卡牌里选一张：动物、地形或道具',
     '动物看地形和周围邻居产出粮草；每天早上动物们会随机换位置',
     '每 7 天有诸侯来收军粮，交不起牧场就没了',
     '交完军粮招一位伙伴，撑过 8 周即通关',
-    '狐狸、夜枭、小云龙会吃邻居，牧羊犬旁边的动物不会被吃',
-    '格子满了也能把动物卡放到别的动物身上，替换掉它',
+    '动物分田园、溪畔、山林、灵兽四家，同家族挨着每只+1',
+    '狐狸、夜枭、小云龙会吃邻居并继承它一半产出；牧羊犬旁边不会被吃',
+    '选了动物会自动落到空位；格子满了就进候选池，第二天早上和场上动物一起随机上场',
   ].forEach((l, k) => {
     diamond(x + 24, y + 70 + k * 40, 3.5, C.gold);
     wrap(l, x + 36, y + 70 + k * 40, w - 52, 13, C.cream, 18, 2);
@@ -808,6 +1146,12 @@ function playFx() {
   list.forEach((f) => {
     const p = f.cell >= 0 ? cellCenter(f.cell) : { x: W / 2, y: INFO_Y };
     floats.push({ x: p.x, y: p.y - 8, text: f.text, color: f.color, t: 0 });
+    const m = /^\+(\d+)$/.exec(f.text);
+    if (m && f.color === '#ffb300' && f.cell >= 0 && +m[1] > 0) {
+      const v = +m[1];
+      inflight += v;
+      flies.push({ x0: p.x, y0: p.y, v, t0: clock + 0.25 + flies.length * 0.05, done: false });
+    }
   });
 }
 function drawFloats(dt: number) {
@@ -826,6 +1170,24 @@ function drawFloats(dt: number) {
 
 // ---------- 主循环 ----------
 let lastT = 0;
+let modalShown = false;
+/** 主按钮呼吸光：提示该点它了 */
+function breathe(x: number, y: number, w: number, h: number) {
+  const a = 0.35 + 0.35 * Math.sin(clock * 3.2);
+  ctx.save(); ctx.shadowColor = 'rgba(255,170,90,' + a + ')'; ctx.shadowBlur = 16;
+  chamfer(x, y, w, h - 5, 10); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,210,140,' + a + ')'; ctx.stroke();
+  ctx.restore();
+}
+/** 点击处的金色涟漪 */
+let ripples: { x: number; y: number; t: number }[] = [];
+function drawRipples() {
+  ripples = ripples.filter((r) => clock - r.t < 0.4);
+  ripples.forEach((r) => {
+    const k = (clock - r.t) / 0.4;
+    ctx.beginPath(); ctx.arc(r.x, r.y, 8 + k * 26, 0, Math.PI * 2);
+    ctx.lineWidth = 2 * (1 - k); ctx.strokeStyle = 'rgba(226,188,106,' + (0.8 * (1 - k)) + ')'; ctx.stroke();
+  });
+}
 function frame(ts?: number) {
   const now = ts || Date.now();
   const dt = lastT ? Math.min(0.05, (now - lastT) / 1000) : 0.016;
@@ -839,20 +1201,29 @@ function frame(ts?: number) {
     drawBackground();
     const k = game.week + '-' + game.day;
     if (k !== dayKey) { dayKey = k; cardModal = true; }
+    tickCoins(dt);
+    if (game.mode !== 'relic') relicAt = -1;
     drawHUD();
     drawBoard();
     drawInfo();
     drawPickBar();
+    drawPool();
     muteButton(PAD + 18, BTN_Y + BTN_H / 2);
     button('🌙 结束今天', PAD + 42, BTN_Y, W - PAD * 2 - 42, BTN_H, endDay, game.choices.length ? 'violet' : 'gold', game.canEndDay() && clock >= waitUntil, 18);
-    if (game.mode === 'play' && cardModal && game.choices.length && game.selected < 0 && clock >= waitUntil + 0.7) drawCardModal();
+    if (!game.choices.length && game.canEndDay() && clock >= waitUntil && game.mode === 'play') breathe(PAD + 42, BTN_Y, W - PAD * 2 - 42, BTN_H);
+    const showModal = game.mode === 'play' && cardModal && game.choices.length > 0 && game.selected < 0 && clock >= waitUntil + 0.7;
+    if (showModal && !modalShown) modalAt = clock;
+    modalShown = showModal;
+    if (showModal) drawCardModal();
     drawFloats(dt);
+    drawFlies();
     if (clock >= waitUntil) {
       if (game.mode === 'rent') drawRent();
       else if (game.mode === 'relic') drawRelic();
       else if (game.mode === 'over' || game.mode === 'win') drawEnd(game.mode === 'win');
     }
   }
+  drawRipples();
   requestAnimationFrame(frame);
 }
 
@@ -888,11 +1259,13 @@ wx.onTouchStart((e: any) => {
   const t = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]);
   if (!t) return;
   const x = t.clientX, y = t.clientY;
+  ripples.push({ x, y, t: clock });
   for (let k = buttons.length - 1; k >= 0; k--) {
     const b = buttons[k];
     if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
       const before = game.mode, coins = game.coins, nChoices = game.choices.length;
       const cells = game.board.map((c) => JSON.stringify(c));
+      press = { x: b.x, y: b.y, t: clock };
       b.onTap();
       feedback(before, coins, cells);
       if (game.choices.length < nChoices && game.selected < 0) cardModal = true;

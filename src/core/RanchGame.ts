@@ -1,6 +1,6 @@
 // 群芳牧场：核心规则（纯逻辑，不依赖 Cocos，可在 Node 里单独测试）
 import {
-  COLS, ROWS, DAYS_PER_WEEK, RENT, TERRAINS, TERRAIN_CARDS, CREATURES, ITEMS, RELICS, LORDS,
+  COLS, ROWS, DAYS_PER_WEEK, RENT, TERRAINS, TERRAIN_CARDS, CREATURES, ITEMS, RELICS, LORDS, PREDATORS,
   Card, Cell, Creature, CreatureId, RelicId, ItemId, cardInfo,
 } from './Data';
 
@@ -27,6 +27,8 @@ export class RanchGame {
   /** 通关后继续挑战（无尽模式） */
   endless = false;
   fx: Fx[] = [];
+  /** 等待第二次点击确认替换的格子 */
+  pendingReplace = -1;
   private nextId = 1;
 
   constructor(private rng: () => number = Math.random) {}
@@ -93,7 +95,17 @@ export class RanchGame {
     return { kind, type: this.pick(pool) };
   }
 
-  private startDay() {
+  /** 每天早上动物们随机换位置（地形不动） */
+  shuffleCreatures() {
+    const cs = this.board.map((c) => c.c).filter((c): c is Creature => !!c);
+    const slots = this.board.map((_, i) => i);
+    for (let k = slots.length - 1; k > 0; k--) { const j = this.rand(k + 1); const t = slots[k]; slots[k] = slots[j]; slots[j] = t; }
+    this.board.forEach((c) => (c.c = null));
+    cs.forEach((c, k) => (this.board[slots[k]].c = c));
+  }
+
+  private startDay(shuffle = false) {
+    if (shuffle) this.shuffleCreatures();
     const n = 3 + (this.has('extra_card') ? 1 : 0);
     this.choices = [];
     for (let k = 0; k < n; k++) this.choices.push(this.drawCard());
@@ -103,8 +115,9 @@ export class RanchGame {
   }
 
   // ---------- 选卡与放置 ----------
-  canPlace(card: Card, cell: Cell): boolean {
-    if (card.kind === 'creature') return !cell.c;
+  /** replace=true 时，动物卡也可以放在已有动物的格子上（替换掉原来的） */
+  canPlace(card: Card, cell: Cell, replace = false): boolean {
+    if (card.kind === 'creature') return !cell.c || (replace && cell.c.type !== card.type);
     if (card.kind === 'terrain') return cell.terrain !== card.type;
     const t = ITEMS[card.type].target;
     if (t === 'creature') return !!cell.c;
@@ -123,6 +136,7 @@ export class RanchGame {
       return;
     }
     this.selected = this.selected === k ? -1 : k;
+    this.pendingReplace = -1;
     if (this.selected >= 0) {
       const info = cardInfo(card);
       const noTarget = card.kind === 'item' && ITEMS[card.type].target === 'none';
@@ -135,6 +149,23 @@ export class RanchGame {
     const cell = this.board[i];
     const sel = this.selectedCard;
     if (sel) {
+      if (sel.kind === 'creature' && cell.c && this.canPlace(sel, cell, true)) {
+        // 格子满了也能放：第一次点提示，第二次确认替换
+        const old = CREATURES[cell.c.type].name;
+        if (this.pendingReplace !== i) {
+          this.pendingReplace = i;
+          this.info = '再点一次，让' + old + '离开牧场（返还' + this.refundOf(cell) + '粮草），换成' + CREATURES[sel.type].name + '。';
+          return;
+        }
+        this.pendingReplace = -1;
+        const refund = this.refundOf(cell);
+        cell.c = null;
+        this.addCoins(refund, i);
+        this.applyCard(sel, i);
+        this.info = old + '离开了牧场（+' + refund + '），' + this.info;
+        return;
+      }
+      this.pendingReplace = -1;
       if (this.canPlace(sel, cell)) this.applyCard(sel, i);
       else this.info = '这里不能放这张卡。';
       return;
@@ -149,7 +180,13 @@ export class RanchGame {
     }
   }
 
-  deselect() { this.selected = -1; }
+  deselect() { this.selected = -1; this.pendingReplace = -1; }
+
+  /** 被替换的动物离开时返还的粮草 */
+  refundOf(cell: Cell) { return cell.c ? 2 + Math.floor(cell.c.bonus / 2) : 0; }
+
+  /** 某格动物有没有被牧羊犬守护（周围有狗就不会被吃） */
+  guarded(i: number) { return this.countAround(i, (n) => !!n.c && n.c.type === 'dog') > 0; }
 
   tapRelicIcon(r: RelicId) { this.info = '伙伴 ' + RELICS[r].name + '「' + RELICS[r].title + '」：' + RELICS[r].desc; }
 
@@ -187,6 +224,13 @@ export class RanchGame {
     this.coins += n;
     if (n > 0) this.total += n;
     this.fx.push({ cell, text: (n >= 0 ? '+' : '') + n, color: '#ffb300' });
+  }
+
+  /** 今天不选卡了 */
+  skipCards() {
+    if (this.mode !== 'play' || !this.choices.length) return;
+    this.choices = []; this.selected = -1; this.pendingReplace = -1;
+    this.info = '今天不选卡了，点「结束今天」收获粮草。';
   }
 
   canReroll() { return this.mode === 'play' && this.choices.length > 0 && this.coins >= this.rerollCost; }
@@ -234,20 +278,28 @@ export class RanchGame {
     sum = Math.round(sum * (this.has('harvest') ? 1.15 : 1));
     const events: string[] = [];
 
-    // 狐狸吃邻居
+    // 猛兽吃邻居：狐狸吃兔和鸡，夜枭吃青蛙和鸭，小云龙每7天吃掉周围最弱的一只。牧羊犬旁边的动物不会被吃。
     if (!this.has('peace')) {
+      const eaten: number[] = [];
       this.board.forEach((cell, i) => {
-        if (!cell.c || cell.c.type !== 'fox') return;
+        if (!cell.c || eaten.indexOf(i) >= 0) return;
+        const rule = PREDATORS[cell.c.type];
+        if (!rule || !rule.when(cell.c)) return;
         const prey = this.neighbors(i).filter((n) => {
           const c = this.board[n].c;
-          return !!c && (c.type === 'bunny' || c.type === 'chick');
+          return !!c && eaten.indexOf(n) < 0 && rule.prey(c.type) && !this.guarded(n);
         });
         if (!prey.length) return;
-        const n = this.pick(prey);
-        events.push('小狐狸吃掉了' + CREATURES[this.board[n].c!.type].name);
+        let n: number;
+        if (rule.weakest) {
+          n = prey.reduce((a, b) => (this.creatureIncome(b) < this.creatureIncome(a) ? b : a));
+        } else n = this.pick(prey);
+        events.push(CREATURES[cell.c.type].name + '吃掉了' + CREATURES[this.board[n].c!.type].name);
         this.board[n].c = null;
-        cell.c.bonus += 2;
+        eaten.push(n);
+        cell.c.bonus += rule.gain;
         this.fx.push({ cell: n, text: '被吃了…', color: '#e5533d' });
+        this.fx.push({ cell: i, text: '永久+' + rule.gain, color: '#c79bff' });
       });
     }
 
@@ -274,7 +326,8 @@ export class RanchGame {
     this.total += sum + interest;
     this.info = '第' + this.day + '天收入 +' + (sum + interest)
       + (interest ? '（含利息' + interest + '）' : '')
-      + (events.length ? '。' + events.join('，') : '');
+      + (events.length ? '。' + events.join('，') : '')
+      + '。天亮了，动物们换了位置';
 
     this.day++;
     if (this.day > DAYS_PER_WEEK) {
@@ -283,7 +336,7 @@ export class RanchGame {
       this.mode = 'rent';
       return true;
     }
-    this.startDay();
+    this.startDay(true);
     return false;
   }
 
@@ -322,7 +375,7 @@ export class RanchGame {
     this.week++;
     this.day = 1;
     this.info = info;
-    this.startDay();
+    this.startDay(true);
     this.mode = 'play';
   }
 

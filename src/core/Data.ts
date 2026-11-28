@@ -3,7 +3,7 @@
 export const COLS = 5;
 export const ROWS = 4;
 export const DAYS_PER_WEEK = 7;
-export const RENT = [30, 90, 180, 350, 600, 950, 1400, 2000];
+export const RENT = [30, 85, 170, 320, 540, 850, 1250, 1800];
 
 export type TerrainId = 'wild' | 'grass' | 'pond' | 'flower' | 'forest' | 'cave';
 export type CreatureId =
@@ -63,7 +63,7 @@ export const CREATURES: Record<CreatureId, CreatureDef> = {
     income: (x) => (x.cell.terrain === 'pond' ? 2 : 0) + x.countAround((n) => n.terrain === 'pond') },
   pig:    { name: '蘑菇猪', icon: '🐷', r: 2, desc: '产出1，在森林或岩洞上+4',
     income: (x) => 1 + (x.cell.terrain === 'forest' || x.cell.terrain === 'cave' ? 4 : 0) },
-  dog:    { name: '牧羊犬', icon: '🐕', r: 2, desc: '产出1，周围每只羊+2',
+  dog:    { name: '牧羊犬', icon: '🐕', r: 2, desc: '产出1，周围每只羊+2；守护周围动物不被吃',
     income: (x) => 1 + 2 * x.countAround((n) => !!n.c && n.c.type === 'sheep') },
   bee:    { name: '蜜蜂群', icon: '🐝', r: 2, desc: '自己和周围每块花田+2',
     income: (x) => 2 * ((x.cell.terrain === 'flower' ? 1 : 0) + x.countAround((n) => n.terrain === 'flower')) },
@@ -71,10 +71,18 @@ export const CREATURES: Record<CreatureId, CreatureDef> = {
     income: (x) => 3 + (x.has('peace') ? 2 : 0) },
   deer:   { name: '月光鹿', icon: '🦌', r: 3, desc: '在森林上产出8，否则1',
     income: (x) => (x.cell.terrain === 'forest' ? 8 : 1) },
-  owl:    { name: '夜枭', icon: '🦉', r: 3, desc: '产出1，周围每只动物+1',
+  owl:    { name: '夜枭', icon: '🦉', r: 3, desc: '产出1，周围每只动物+1；夜里吃掉周围一只青蛙或鸭，永久+3',
     income: (x) => 1 + x.countAround((n) => !!n.c) },
-  dragon: { name: '小云龙', icon: '🐉', r: 3, desc: '产出1，每过一天永久+1',
+  dragon: { name: '小云龙', icon: '🐉', r: 3, desc: '产出1，每天永久+1；每7天吃掉周围最弱的一只动物，永久+3',
     income: (x) => 1 + x.c.age },
+};
+
+/** 会吃邻居的动物：prey 可以吃谁，when 哪天吃，gain 吃一只永久加多少，weakest 挑最弱的吃 */
+export interface PredatorRule { prey(t: CreatureId): boolean; when(c: Creature): boolean; gain: number; weakest?: boolean; }
+export const PREDATORS: Partial<Record<CreatureId, PredatorRule>> = {
+  fox:    { prey: (t) => t === 'bunny' || t === 'chick', when: () => true, gain: 2 },
+  owl:    { prey: (t) => t === 'frog' || t === 'duck', when: () => true, gain: 3 },
+  dragon: { prey: (t) => t !== 'dragon', when: (c) => (c.age + 1) % 7 === 0, gain: 3, weakest: true },
 };
 
 export const ITEMS: Record<ItemId, ItemDef> = {
@@ -91,7 +99,7 @@ export const RELICS: Record<RelicId, RelicDef> = {
   harvest:    { name: '张飞', title: '燕人屠户', icon: '🍖', art: 'hero_zhangfei', desc: '很会做买卖，每晚总收入+15%' },
   extra_card: { name: '诸葛亮', title: '卧龙', icon: '🪶', art: 'hero_zhugeliang', desc: '神机妙算，每天多一张候选卡' },
   interest:   { name: '黄月英', title: '木牛流马', icon: '⚙️', art: 'hero_huangyueying', desc: '帮你打理粮仓，每晚获得持有粮草的5%（最多10）' },
-  peace:      { name: '关羽', title: '义薄云天', icon: '⚔️', art: 'hero_guanyu', desc: '镇住了狐狸，狐狸不再吃邻居，但产出+2' },
+  peace:      { name: '关羽', title: '义薄云天', icon: '⚔️', art: 'hero_guanyu', desc: '镇住了猛兽，它们不再吃邻居，狐狸产出+2' },
   fertile:    { name: '小乔', title: '花月佳人', icon: '🎀', art: 'hero_xiaoqiao', desc: '最会照顾小动物，兔子繁殖概率翻倍' },
   favor:      { name: '貂蝉', title: '闭月', icon: '🌙', art: 'hero_diaochan', desc: '诸侯们都给她面子，之后的军粮-15%' },
   diligent:   { name: '赵云', title: '白马银枪', icon: '🐎', art: 'hero_zhaoyun', desc: '一人顶两人，每天可以选2张卡' },

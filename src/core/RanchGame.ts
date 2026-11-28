@@ -1,6 +1,6 @@
 // 群芳牧场：核心规则（纯逻辑，不依赖 Cocos，可在 Node 里单独测试）
 import {
-  COLS, ROWS, DAYS_PER_WEEK, RENT, TERRAINS, TERRAIN_CARDS, CREATURES, ITEMS, RELICS, LORDS, PREDATORS,
+  COLS, ROWS, DAYS_PER_WEEK, RENT, TERRAINS, TERRAIN_CARDS, CREATURES, ITEMS, RELICS, LORDS, PREDATORS, INHERIT, FAMILIES, FamilyId,
   Card, Cell, Creature, CreatureId, RelicId, ItemId, cardInfo,
 } from './Data';
 
@@ -28,6 +28,8 @@ export class RanchGame {
   relicChoices: RelicId[] = [];
   info = '';
   best = 0;
+  /** 本局单晚产出最高的一只动物（结算页展示） */
+  star: { type: CreatureId; v: number } | null = null;
   /** 通关后继续挑战（无尽模式） */
   endless = false;
   fx: Fx[] = [];
@@ -75,7 +77,7 @@ export class RanchGame {
   // ---------- 开局 ----------
   newGame() {
     this.week = 1; this.day = 1; this.coins = 5; this.total = 0;
-    this.relics = []; this.relicChoices = []; this.fx = []; this.endless = false; this.pool = [];
+    this.relics = []; this.relicChoices = []; this.fx = []; this.endless = false; this.pool = []; this.star = null;
     this.board = [];
     for (let i = 0; i < COLS * ROWS; i++) this.board.push({ terrain: 'wild', c: null });
     [6, 7, 8, 11, 12, 13].forEach((i) => (this.board[i].terrain = 'grass'));
@@ -140,6 +142,15 @@ export class RanchGame {
     if (card.kind === 'creature') { this.selected = k; this.addCreature(card.type); this.consumeCard(); return; }
     if (this.selected === k && card.kind === 'item' && ITEMS[card.type].target === 'none') {
       if (card.type === 'bell') { this.addCoins(8); this.info = '叮铃～ +8粮草'; }
+      if (card.type.startsWith('flag_')) {
+        const f = card.type.slice(5) as FamilyId;
+        let n = 0;
+        this.board.forEach((cell, i) => {
+          if (cell.c && CREATURES[cell.c.type].fam === f) { cell.c.bonus++; n++; this.fx.push({ cell: i, text: '永久+1', color: '#c79bff' }); }
+        });
+        this.pool.forEach((c) => { if (CREATURES[c.type].fam === f) { c.bonus++; n++; } });
+        this.info = FAMILIES[f].name + '家的' + n + '只动物都永久+1！';
+      }
       this.consumeCard();
       return;
     }
@@ -165,7 +176,7 @@ export class RanchGame {
     }
     if (cell.c) {
       const d = CREATURES[cell.c.type];
-      this.info = d.name + '（' + TERRAINS[cell.terrain].name + '）：' + d.desc
+      this.info = d.name + '（' + FAMILIES[d.fam].name + '家，' + TERRAINS[cell.terrain].name + '）：' + d.desc
         + (cell.c.bonus ? '。额外+' + cell.c.bonus : '')
         + (cell.c.last !== null ? '。昨晚产出' + cell.c.last : '');
     } else {
@@ -264,7 +275,8 @@ export class RanchGame {
       i, cell, c,
       has: (r) => this.has(r),
       countAround: (fn) => this.countAround(i, fn),
-    }) + c.bonus + (this.has('hot_spring') && cell.terrain === 'pond' ? 2 : 0);
+    }) + c.bonus + (this.has('hot_spring') && cell.terrain === 'pond' ? 2 : 0)
+      + this.countAround(i, (n) => !!n.c && CREATURES[n.c.type].fam === CREATURES[c.type].fam);
     return Math.max(0, v);
   }
   previewIncome(): number {
@@ -284,6 +296,7 @@ export class RanchGame {
       const v = this.creatureIncome(i);
       cell.c.last = v;
       sum += v;
+      if (!this.star || v > this.star.v) this.star = { type: cell.c.type, v };
       this.fx.push({ cell: i, text: '+' + v, color: '#ffb300' });
     });
     sum = Math.round(sum * (this.has('harvest') ? 1.15 : 1));
@@ -305,12 +318,14 @@ export class RanchGame {
         if (rule.weakest) {
           n = prey.reduce((a, b) => (this.creatureIncome(b) < this.creatureIncome(a) ? b : a));
         } else n = this.pick(prey);
-        events.push(CREATURES[cell.c.type].name + '吃掉了' + CREATURES[this.board[n].c!.type].name);
+        // 吃掉的同时继承猎物一半的产出，越吃越强
+        const gain = rule.gain + Math.floor(this.creatureIncome(n) * INHERIT);
+        events.push(CREATURES[cell.c.type].name + '吃掉了' + CREATURES[this.board[n].c!.type].name + '，永久+' + gain);
         this.board[n].c = null;
         eaten.push(n);
-        cell.c.bonus += rule.gain;
+        cell.c.bonus += gain;
         this.fx.push({ cell: n, text: '被吃了…', color: '#e5533d' });
-        this.fx.push({ cell: i, text: '永久+' + rule.gain, color: '#c79bff' });
+        this.fx.push({ cell: i, text: '永久+' + gain, color: '#c79bff' });
       });
     }
 
@@ -407,15 +422,15 @@ export class RanchGame {
   /** 进行中的一局存成字符串（结束或在标题页时返回空串） */
   save(): string {
     if (this.mode === 'title' || this.mode === 'over' || this.mode === 'win') return '';
-    const { mode, week, day, coins, total, board, pool, relics, choices, selected, picksLeft, rerollCost, relicChoices, info, endless, nextId } = this;
-    return JSON.stringify({ v: 1, mode, week, day, coins, total, board, pool, relics, choices, selected, picksLeft, rerollCost, relicChoices, info, endless, nextId });
+    const { mode, week, day, coins, total, board, pool, star, relics, choices, selected, picksLeft, rerollCost, relicChoices, info, endless, nextId } = this;
+    return JSON.stringify({ v: 1, mode, week, day, coins, total, board, pool, star, relics, choices, selected, picksLeft, rerollCost, relicChoices, info, endless, nextId });
   }
   load(str: string): boolean {
     try {
       const d = JSON.parse(str);
       if (!d || d.v !== 1 || !Array.isArray(d.board) || d.board.length !== COLS * ROWS) return false;
       Object.assign(this, {
-        mode: d.mode, week: d.week, day: d.day, coins: d.coins, total: d.total, board: d.board, pool: d.pool || [], relics: d.relics,
+        mode: d.mode, week: d.week, day: d.day, coins: d.coins, total: d.total, board: d.board, pool: d.pool || [], star: d.star || null, relics: d.relics,
         choices: d.choices, selected: d.selected, picksLeft: d.picksLeft, rerollCost: d.rerollCost,
         relicChoices: d.relicChoices, info: d.info, endless: !!d.endless, nextId: d.nextId, fx: [],
       });

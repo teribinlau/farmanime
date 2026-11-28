@@ -3,14 +3,23 @@
 export const COLS = 5;
 export const ROWS = 4;
 export const DAYS_PER_WEEK = 7;
-export const RENT = [30, 85, 165, 305, 505, 790, 1160, 1660];
+export const RENT = [30, 95, 200, 380, 650, 1050, 1550, 2250];
 
 export type TerrainId = 'wild' | 'grass' | 'pond' | 'flower' | 'forest' | 'cave';
 export type CreatureId =
   | 'sheep' | 'duck' | 'chick' | 'bunny' | 'frog'
   | 'pig' | 'dog' | 'bee' | 'fox'
   | 'deer' | 'owl' | 'dragon';
-export type ItemId = 'cookie' | 'seed' | 'water' | 'broom' | 'bell';
+export type ItemId = 'cookie' | 'seed' | 'water' | 'broom' | 'bell' | 'flag_tian' | 'flag_xi' | 'flag_shan' | 'flag_ling';
+
+/** 动物家族：同家族的邻居互相 +1，家族令让整个家族永久变强 */
+export type FamilyId = 'tian' | 'xi' | 'shan' | 'ling';
+export const FAMILIES: Record<FamilyId, { name: string; icon: string; color: string }> = {
+  tian: { name: '田园', icon: '🌾', color: '#c58b2a' },
+  xi:   { name: '溪畔', icon: '🌊', color: '#3f8fb5' },
+  shan: { name: '山林', icon: '🌲', color: '#4f8a3c' },
+  ling: { name: '灵兽', icon: '✨', color: '#8a5aa8' },
+};
 export type RelicId =
   | 'full_moon' | 'hot_spring' | 'harvest' | 'extra_card' | 'interest'
   | 'peace' | 'fertile' | 'favor' | 'diligent';
@@ -33,7 +42,7 @@ export interface IncomeCtx {
 }
 
 export interface TerrainDef { name: string; color: string; icon: string; }
-export interface CreatureDef { name: string; icon: string; r: 1 | 2 | 3; desc: string; income(x: IncomeCtx): number; }
+export interface CreatureDef { name: string; icon: string; r: 1 | 2 | 3; fam: FamilyId; desc: string; income(x: IncomeCtx): number; }
 export interface ItemDef { name: string; icon: string; desc: string; target: 'creature' | 'plot' | 'none'; }
 /** 伙伴（交完军粮后三选一加入牧场的三国美少女），art 为图片 key */
 export interface RelicDef { name: string; title: string; icon: string; art: string; desc: string; }
@@ -51,34 +60,37 @@ export const TERRAINS: Record<TerrainId, TerrainDef> = {
 export const TERRAIN_CARDS: TerrainId[] = ['grass', 'pond', 'flower', 'forest', 'cave'];
 
 export const CREATURES: Record<CreatureId, CreatureDef> = {
-  sheep:  { name: '云朵羊', icon: '🐑', r: 1, desc: '产出2，在草地上+2',
+  sheep:  { name: '云朵羊', icon: '🐑', r: 1, fam: 'tian', desc: '产出2，在草地上+2',
     income: (x) => 2 + (x.cell.terrain === 'grass' ? 2 : 0) + (x.has('full_moon') ? 2 : 0) },
-  duck:   { name: '胖胖鸭', icon: '🦆', r: 1, desc: '产出1，在水塘上+3',
+  duck:   { name: '胖胖鸭', icon: '🦆', r: 1, fam: 'xi', desc: '产出1，在水塘上+3',
     income: (x) => 1 + (x.cell.terrain === 'pond' ? 3 : 0) },
-  chick:  { name: '布丁鸡', icon: '🐤', r: 1, desc: '产出2，每第3天下蛋+5',
+  chick:  { name: '布丁鸡', icon: '🐤', r: 1, fam: 'tian', desc: '产出2，每第3天下蛋+5',
     income: (x) => 2 + ((x.c.age + 1) % 3 === 0 ? 5 : 0) },
-  bunny:  { name: '星星兔', icon: '🐰', r: 1, desc: '产出1，周围有兔子时夜里可能生小兔',
+  bunny:  { name: '星星兔', icon: '🐰', r: 1, fam: 'ling', desc: '产出1，周围有兔子时夜里可能生小兔',
     income: () => 1 },
-  frog:   { name: '跳跳蛙', icon: '🐸', r: 1, desc: '在水塘上产出2，周围每块水塘+1',
+  frog:   { name: '跳跳蛙', icon: '🐸', r: 1, fam: 'xi', desc: '在水塘上产出2，周围每块水塘+1',
     income: (x) => (x.cell.terrain === 'pond' ? 2 : 0) + x.countAround((n) => n.terrain === 'pond') },
-  pig:    { name: '蘑菇猪', icon: '🐷', r: 2, desc: '产出1，在森林或岩洞上+4',
+  pig:    { name: '蘑菇猪', icon: '🐷', r: 2, fam: 'shan', desc: '产出1，在森林或岩洞上+4',
     income: (x) => 1 + (x.cell.terrain === 'forest' || x.cell.terrain === 'cave' ? 4 : 0) },
-  dog:    { name: '牧羊犬', icon: '🐕', r: 2, desc: '产出1，周围每只羊+2；守护周围动物不被吃',
+  dog:    { name: '牧羊犬', icon: '🐕', r: 2, fam: 'tian', desc: '产出1，周围每只羊+2；守护周围动物不被吃',
     income: (x) => 1 + 2 * x.countAround((n) => !!n.c && n.c.type === 'sheep') },
-  bee:    { name: '蜜蜂群', icon: '🐝', r: 2, desc: '自己和周围每块花田+2',
+  bee:    { name: '蜜蜂群', icon: '🐝', r: 2, fam: 'xi', desc: '自己和周围每块花田+2',
     income: (x) => 2 * ((x.cell.terrain === 'flower' ? 1 : 0) + x.countAround((n) => n.terrain === 'flower')) },
-  fox:    { name: '小狐狸', icon: '🦊', r: 2, desc: '产出3，夜里吃掉周围一只兔或鸡，永久+2',
+  fox:    { name: '小狐狸', icon: '🦊', r: 2, fam: 'shan', desc: '产出3，夜里吃掉周围一只兔或鸡，永久+2',
     income: (x) => 3 + (x.has('peace') ? 2 : 0) },
-  deer:   { name: '月光鹿', icon: '🦌', r: 3, desc: '在森林上产出8，否则1',
+  deer:   { name: '月光鹿', icon: '🦌', r: 3, fam: 'shan', desc: '在森林上产出8，否则1',
     income: (x) => (x.cell.terrain === 'forest' ? 8 : 1) },
-  owl:    { name: '夜枭', icon: '🦉', r: 3, desc: '产出1，周围每只动物+1；夜里吃掉周围一只青蛙或鸭，永久+3',
+  owl:    { name: '夜枭', icon: '🦉', r: 3, fam: 'ling', desc: '产出1，周围每只动物+1；夜里吃掉周围一只青蛙或鸭，永久+3',
     income: (x) => 1 + x.countAround((n) => !!n.c) },
-  dragon: { name: '小云龙', icon: '🐉', r: 3, desc: '产出1，每天永久+1；每7天吃掉周围最弱的一只动物，永久+3',
+  dragon: { name: '小云龙', icon: '🐉', r: 3, fam: 'ling', desc: '产出1，每天永久+1；每7天吃掉周围最弱的一只动物，永久+3',
     income: (x) => 1 + x.c.age },
 };
 
 /** 会吃邻居的动物：prey 可以吃谁，when 哪天吃，gain 吃一只永久加多少，weakest 挑最弱的吃 */
 export interface PredatorRule { prey(t: CreatureId): boolean; when(c: Creature): boolean; gain: number; weakest?: boolean; }
+/** 吃掉别的动物时，额外永久继承它产出的一半 */
+export const INHERIT = 0.5;
+
 export const PREDATORS: Partial<Record<CreatureId, PredatorRule>> = {
   fox:    { prey: (t) => t === 'bunny' || t === 'chick', when: () => true, gain: 2 },
   owl:    { prey: (t) => t === 'frog' || t === 'duck', when: () => true, gain: 3 },
@@ -91,6 +103,10 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   water:  { name: '洒水壶', icon: '🚿', desc: '把一块地变成水塘', target: 'plot' },
   broom:  { name: '小扫帚', icon: '🧹', desc: '移走一只动物，返还4粮草', target: 'creature' },
   bell:   { name: '招财铃', icon: '🔔', desc: '立刻获得8粮草（再点一次使用）', target: 'none' },
+  flag_tian: { name: '田园令', icon: '🌾', desc: '田园家（羊、犬、鸡）全部永久+1（再点一次使用）', target: 'none' },
+  flag_xi:   { name: '溪畔令', icon: '🌊', desc: '溪畔家（鸭、蛙、蜂）全部永久+1（再点一次使用）', target: 'none' },
+  flag_shan: { name: '山林令', icon: '🌲', desc: '山林家（猪、鹿、狐）全部永久+1（再点一次使用）', target: 'none' },
+  flag_ling: { name: '灵兽令', icon: '✨', desc: '灵兽家（兔、枭、龙）全部永久+1（再点一次使用）', target: 'none' },
 };
 
 export const RELICS: Record<RelicId, RelicDef> = {
@@ -120,7 +136,7 @@ export const LORDS: LordDef[] = [
 export function cardInfo(card: Card): { icon: string; name: string; desc: string; tag: string } {
   if (card.kind === 'creature') {
     const d = CREATURES[card.type];
-    return { icon: d.icon, name: d.name, desc: d.desc, tag: ['', '普通', '稀有', '史诗'][d.r] };
+    return { icon: d.icon, name: d.name, desc: d.desc + '；同家族邻居各+1', tag: FAMILIES[d.fam].name + '·' + ['', '普通', '稀有', '史诗'][d.r] };
   }
   if (card.kind === 'terrain') {
     const d = TERRAINS[card.type];

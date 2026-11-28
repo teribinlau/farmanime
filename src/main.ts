@@ -568,7 +568,9 @@ function drawCardModal() {
     ctx.fillStyle = rg; ctx.fillRect(x, y + 38, cw, ah);
     icon(cardArtKey(card), info.icon || '⬛', x + cw / 2, y + 38 + ah / 2, 40, Math.min(cw - 10, ah - 4));
     // 标签 + 收益
-    chamfer(x + cw / 2 - 26, y + 40 + ah, 52, 17, 5); ctx.fillStyle = 'rgba(60,44,30,0.82)'; ctx.fill();
+    ctx.font = 'bold 10px ' + FONT;
+    const tw = Math.min(cw - 8, ctx.measureText(info.tag).width + 16);
+    chamfer(x + cw / 2 - tw / 2, y + 40 + ah, tw, 17, 5); ctx.fillStyle = 'rgba(60,44,30,0.82)'; ctx.fill();
     text(info.tag, x + cw / 2, y + 48.5 + ah, 10, col, 'center', true);
     // 规则：大字，数字高亮
     const ry = y + 68 + ah;
@@ -723,7 +725,7 @@ function drawRelic() {
 
 function drawEnd(win: boolean) {
   dim(0.75);
-  const ph = win ? 330 : 280;
+  const ph = (win ? 330 : 280) + (game.star ? 44 : 0);
   const py = H - SAFE_BOTTOM - ph - 20;
   const who = win ? img('heroine') : img(game.lord.art);
   if (who) drawContain(who, W / 2, py - (H * 0.5) / 2 + 30, W, H * 0.5, true);
@@ -744,10 +746,20 @@ function drawEnd(win: boolean) {
     goldText(v, sx + sw / 2, py + 116, 19, 'center', FONT);
   });
   text('最好成绩 ' + game.best + ' 周', W / 2, py + 142, 11, C.muted, 'center');
+  let sy = py + 166;
+  if (game.star) {
+    // 最强一只：方便截图炫耀
+    const st = game.star;
+    fillRR(40, sy - 6, W - 80, 40, 8, 'rgba(184,67,47,0.08)');
+    icon(st.type, CREATURES[st.type].icon, 66, sy + 14, 22, 36);
+    text('最强一只', 92, sy + 5, 11, C.muted, 'left');
+    text(CREATURES[st.type].name + ' · 一晚产出 ' + st.v, 92, sy + 23, 15, C.crimson, 'left', true, SERIF);
+    sy += 44;
+  }
   let ax = W / 2 - (game.relics.length - 1) * 13;
-  game.relics.forEach((id) => { avatar(RELICS[id].art, RELICS[id].icon, ax, py + 166, 10); ax += 26; });
+  game.relics.forEach((id) => { avatar(RELICS[id].art, RELICS[id].icon, ax, sy, 10); ax += 26; });
   const bw = W - 96;
-  let by = py + 190;
+  let by = sy + 24;
   if (win) {
     button('继续挑战（无尽模式）', 48, by, bw, 46, () => game.continueEndless(), 'crimson');
     by += 56;
@@ -805,7 +817,7 @@ function drawTitle() {
 let showHelp = false;
 function drawHelp() {
   dim(0.6);
-  const w = W - 48, h = 330, x = 24, y = (H - h) / 2;
+  const w = W - 48, h = 380, x = 24, y = (H - h) / 2;
   panel(x, y, w, h, { c: 12 });
   goldText('玩法', W / 2, y + 30, 22);
   ornamentLine(W / 2, y + 30, w * 0.4, 44);
@@ -814,7 +826,8 @@ function drawHelp() {
     '动物看地形和周围邻居产出粮草；每天早上动物们会随机换位置',
     '每 7 天有诸侯来收军粮，交不起牧场就没了',
     '交完军粮招一位伙伴，撑过 8 周即通关',
-    '狐狸、夜枭、小云龙会吃邻居，牧羊犬旁边的动物不会被吃',
+    '动物分田园、溪畔、山林、灵兽四家，同家族挨着每只+1',
+    '狐狸、夜枭、小云龙会吃邻居并继承它一半产出；牧羊犬旁边不会被吃',
     '选了动物会自动落到空位；格子满了就进候选池，第二天早上和场上动物一起随机上场',
   ].forEach((l, k) => {
     diamond(x + 24, y + 70 + k * 40, 3.5, C.gold);

@@ -48,10 +48,10 @@ const out = path.resolve('test/shots'); fs.mkdirSync(out, { recursive: true });
         let bestV = -1, bk = -1, bi = -1;
         g.choices.forEach((c, k) => g.board.forEach((_, i) => {
           if (!g.canPlace(c, g.board[i])) return;
-          const snap = JSON.stringify({ b: g.board, ch: g.choices, coins: g.coins, p: g.picksLeft });
+          const snap = JSON.stringify({ b: g.board, ch: g.choices, coins: g.coins, p: g.picksLeft, pl: g.pool, n: g.info });
           g.selected = k; g.tapCell(i);
           const v = g.previewIncome() * 7 + g.coins;
-          const s = JSON.parse(snap); g.board = s.b; g.choices = s.ch; g.coins = s.coins; g.picksLeft = s.p; g.selected = -1;
+          const s = JSON.parse(snap); g.board = s.b; g.choices = s.ch; g.coins = s.coins; g.picksLeft = s.p; g.pool = s.pl; g.info = s.n; g.selected = -1;
           if (v > bestV) { bestV = v; bk = k; bi = i; }
         }));
         if (bk < 0) break;

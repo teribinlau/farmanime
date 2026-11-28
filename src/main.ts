@@ -1,7 +1,7 @@
 // 群芳牧场 —— 微信小游戏（原生 Canvas 2D，无引擎）
 // 规则在 core/，这里只负责绘制和触摸。浏览器试玩时由 web/index.html 提供一个简化版 wx。
 import { COLS, ROWS, DAYS_PER_WEEK, TERRAINS, CREATURES, RELICS, ITEMS, cardInfo, Card, RelicId } from './core/Data';
-import { RanchGame } from './core/RanchGame';
+import { RanchGame, POOL_MAX } from './core/RanchGame';
 
 declare const wx: any;
 /** 打包时由 build.mjs 写入：images/ 里实际存在的图片 key */
@@ -613,10 +613,31 @@ function pickCard(k: number) {
   const card = game.choices[k];
   if (!card) return;
   game.tapCard(k);
+  if (card.kind === 'creature') return; // 动物已经自动上场或进了候选池
   if (card.kind === 'item' && ITEMS[card.type].target === 'none') { game.tapCard(k); return; }
   cardModal = false;
 }
 /** 选好卡、还没放下时，在底部显示「换一张」 */
+/** 候选池：牧场满了时等着上场的动物 */
+function drawPool() {
+  const pool = game.pool;
+  if (game.mode !== 'play' && game.mode !== 'rent') return;
+  if (!pool.length) return;
+  const x = PAD, y = INFO_Y - 46, h = 36;
+  const show = Math.min(pool.length, 5);
+  const w = 62 + show * 30 + (pool.length > show ? 26 : 0);
+  panel(x, y, w, h, { c: 6, corners: false });
+  text('候选池', x + 10, y + h / 2, 11, C.cream, 'left', true, SERIF);
+  for (let k = 0; k < show; k++) {
+    const c = pool[k];
+    icon(c.type, CREATURES[c.type].icon, x + 66 + k * 30, y + h / 2, 18, 28);
+  }
+  if (pool.length > show) text('+' + (pool.length - show), x + 66 + show * 30 + 2, y + h / 2, 11, C.crimson, 'left', true);
+  hit(x, y, w, h, () => {
+    game.info = '候选池（' + pool.length + '/' + POOL_MAX + '）：' + pool.map((c) => CREATURES[c.type].name).join('、') + '。明早会和场上动物一起随机上场。';
+  }, '候选池');
+}
+
 function drawPickBar() {
   if (game.mode !== 'play' || !game.choices.length) return;
   if (game.selected >= 0) {
@@ -794,7 +815,7 @@ function drawHelp() {
     '每 7 天有诸侯来收军粮，交不起牧场就没了',
     '交完军粮招一位伙伴，撑过 8 周即通关',
     '狐狸、夜枭、小云龙会吃邻居，牧羊犬旁边的动物不会被吃',
-    '格子满了也能把动物卡放到别的动物身上，替换掉它',
+    '选了动物会自动落到空位；格子满了就进候选池，第二天早上和场上动物一起随机上场',
   ].forEach((l, k) => {
     diamond(x + 24, y + 70 + k * 40, 3.5, C.gold);
     wrap(l, x + 36, y + 70 + k * 40, w - 52, 13, C.cream, 18, 2);
@@ -843,6 +864,7 @@ function frame(ts?: number) {
     drawBoard();
     drawInfo();
     drawPickBar();
+    drawPool();
     muteButton(PAD + 18, BTN_Y + BTN_H / 2);
     button('🌙 结束今天', PAD + 42, BTN_Y, W - PAD * 2 - 42, BTN_H, endDay, game.choices.length ? 'violet' : 'gold', game.canEndDay() && clock >= waitUntil, 18);
     if (game.mode === 'play' && cardModal && game.choices.length && game.selected < 0 && clock >= waitUntil + 0.7) drawCardModal();

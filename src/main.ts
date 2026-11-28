@@ -479,10 +479,10 @@ function drawBoard() {
         lift = Math.sin(Math.PI * t) * CELL * 0.35;
         if (t >= 1) delete hops[id];
       }
-      if (!hop) {
-        ctx.beginPath(); ctx.ellipse(x + CELL / 2, y + CELL * 0.84, CELL * 0.28, CELL * 0.07, 0, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fill();
-      }
+      // 地面阴影（跳起来时变小变淡）
+      const sk = 1 - Math.min(0.6, lift / CELL);
+      ctx.beginPath(); ctx.ellipse(x + CELL / 2 + ox, y + CELL * 0.84 + oy, CELL * 0.28 * sk, CELL * 0.07 * sk, 0, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0,0,0,' + (0.28 * sk) + ')'; ctx.fill();
       const pt = clock - (popAt[i] || -9);
       const k = pt < 0.35 ? popScale(pt / 0.35) : 1;
       const bob = hop ? 0 : Math.sin(clock * 2 + i) * 0.8;
@@ -579,7 +579,7 @@ function drawCardModal() {
   const by = cy + ch + 18, bw = (W - PAD * 2 - 12) / 2;
   button('🔄 刷新 🌾' + game.rerollCost, PAD, by, bw, 46, () => game.reroll(), 'violet', game.canReroll(), 15);
   button('跳过', PAD + bw + 12, by, bw, 46, () => { game.skipCards(); }, 'ghost', true, 15);
-  shadowText('点卡牌选择，再点牧场格子放置；点空白处先看看牧场', W / 2, by + 66, 12, C.cream, 'center');
+  shadowText('动物会自动上场；地形和道具选好后再点格子', W / 2, by + 66, 12, C.cream, 'center');
 }
 /** 把说明里的数字和关键词标成金色 */
 function richWrap(s: string, cx: number, y: number, maxW: number, size: number, lineH: number, maxLines: number) {
@@ -648,7 +648,7 @@ function drawPickBar() {
 }
 
 function dim(alpha = 0.5) {
-  ctx.fillStyle = 'rgba(58,44,30,' + alpha * 0.75 + ')';
+  ctx.fillStyle = 'rgba(58,44,30,' + Math.min(0.85, alpha * 0.95) + ')';
   ctx.fillRect(0, 0, W, H);
 }
 

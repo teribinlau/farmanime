@@ -82,7 +82,7 @@ export class RanchGame {
     this.board[9].terrain = 'pond';
     this.board[7].c = this.makeCreature('sheep');
     this.board[12].c = this.makeCreature('chick');
-    this.info = '点一张卡，再点牧场格子来放置。';
+    this.info = '选一张卡：动物自动上场，地形和道具再点格子使用。';
     this.startDay();
     this.mode = 'play';
   }

@@ -629,8 +629,17 @@ function drawHUD() {
 
 function drawBoard() {
   const fx = BOARD_X - BOARD_PAD, fy = BOARD_Y - BOARD_PAD, fw = CELL * COLS + BOARD_PAD * 2, fh = CELL * ROWS + BOARD_PAD * 2;
-  if (img('bg_scene')) fillRR(fx + 2, fy + 2, fw - 4, fh - 4, 10, 'rgba(70,90,40,0.10)');
-  else panel(fx, fy, fw, fh, { c: 12, fill: 'rgba(238,228,204,0.92)' });
+  // 木漆托盘：深色胡桃木底 + 鎏金边，格子嵌在里面
+  ctx.save();
+  ctx.shadowColor = 'rgba(30,16,8,0.45)'; ctx.shadowBlur = 16; ctx.shadowOffsetY = 5;
+  rr(fx - 3, fy - 3, fw + 6, fh + 6, 16); ctx.fillStyle = metal('gold', fx, fy, fx + fw * 0.6, fy + fh); ctx.fill();
+  ctx.restore();
+  rr(fx, fy, fw, fh, 13);
+  const tg = ctx.createLinearGradient(0, fy, 0, fy + fh);
+  tg.addColorStop(0, '#4d3424'); tg.addColorStop(1, '#25170f');
+  ctx.fillStyle = tg; ctx.fill();
+  rr(fx + 3, fy + 3, fw - 6, fh - 6, 11); ctx.lineWidth = 0.8; ctx.strokeStyle = 'rgba(226,188,106,0.35)'; ctx.stroke();
+  corners4(fx + 3, fy + 3, fw - 6, fh - 6, 5, 'rgba(226,188,106,0.7)');
   // 伙伴头像挂在棋盘右上角外沿
   let rx = fx + fw - 14;
   for (let k = game.relics.length - 1; k >= 0; k--) {
@@ -645,18 +654,38 @@ function drawBoard() {
     const x = BOARD_X + (i % COLS) * CELL, y = BOARD_Y + Math.floor(i / COLS) * CELL;
     const t = TERRAINS[cell.terrain];
     const tile = img('tile_' + cell.terrain);
-    const g = 2, r = 7;
-    ctx.save(); rr(x + g, y + g, CELL - g * 2, CELL - g * 2, r); ctx.clip();
-    if (tile) ctx.drawImage(tile, x + g, y + g, CELL - g * 2, CELL - g * 2);
+    const g = 3, r = 8, th = 3; // 间隙、圆角、格子厚度
+    const tw = CELL - g * 2, tf = CELL - g * 2 - th;
+    const wild = cell.terrain === 'wild';
+    // 厚度（底边）
+    rr(x + g, y + g + th, tw, tf, r); ctx.fillStyle = wild ? '#1a0f09' : 'rgba(20,10,4,0.85)'; ctx.fill();
+    ctx.save(); rr(x + g, y + g, tw, tf, r); ctx.clip();
+    if (tile) ctx.drawImage(tile, x + g, y + g, tw, tf);
     else { ctx.fillStyle = t.color; ctx.fillRect(x, y, CELL, CELL); }
-    // 压暗一点，再加内阴影和顶部高光，让格子更有质感
-    const sh = ctx.createLinearGradient(0, y, 0, y + CELL);
-    sh.addColorStop(0, 'rgba(255,255,255,0.10)'); sh.addColorStop(0.5, 'rgba(0,0,0,0.05)'); sh.addColorStop(1, 'rgba(0,0,0,0.30)');
+    // 顶部高光 + 底部压暗，像一块嵌进去的砖
+    const sh = ctx.createLinearGradient(0, y + g, 0, y + g + tf);
+    sh.addColorStop(0, 'rgba(255,250,230,0.22)'); sh.addColorStop(0.35, 'rgba(255,255,255,0)'); sh.addColorStop(1, 'rgba(30,15,5,0.28)');
     ctx.fillStyle = sh; ctx.fillRect(x, y, CELL, CELL);
-    if (cell.terrain === 'wild') { ctx.fillStyle = 'rgba(40,24,30,0.38)'; ctx.fillRect(x, y, CELL, CELL); }
+    // 四周暗角
+    const vg = ctx.createRadialGradient(x + CELL / 2, y + CELL / 2, CELL * 0.25, x + CELL / 2, y + CELL / 2, CELL * 0.72);
+    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, wild ? 'rgba(30,16,8,0.5)' : 'rgba(30,16,8,0.22)');
+    ctx.fillStyle = vg; ctx.fillRect(x, y, CELL, CELL);
+    if (wild) {
+      ctx.fillStyle = 'rgba(50,30,18,0.42)'; ctx.fillRect(x, y, CELL, CELL);
+      // 空地中间一枚淡淡的菱形纹，提示这里可以放东西
+      ctx.save(); ctx.translate(x + CELL / 2, y + g + tf / 2);
+      ctx.strokeStyle = 'rgba(240,210,160,0.22)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(0, -9); ctx.lineTo(9, 0); ctx.lineTo(0, 9); ctx.lineTo(-9, 0); ctx.closePath(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, -4); ctx.lineTo(4, 0); ctx.lineTo(0, 4); ctx.lineTo(-4, 0); ctx.closePath(); ctx.fillStyle = 'rgba(240,210,160,0.18)'; ctx.fill();
+      ctx.restore();
+    }
     ctx.restore();
-    rr(x + g + 0.5, y + g + 0.5, CELL - g * 2 - 1, CELL - g * 2 - 1, r);
-    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(70,50,30,0.35)'; ctx.stroke();
+    // 描边：有动物的格子用鎏金边，空地只留一道暗线
+    rr(x + g + 0.5, y + g + 0.5, tw - 1, tf - 1, r);
+    if (cell.c) { ctx.lineWidth = 1.5; ctx.strokeStyle = metal('gold', x, y, x + CELL * 0.6, y + CELL); }
+    else { ctx.lineWidth = 1; ctx.strokeStyle = wild ? 'rgba(226,188,106,0.18)' : 'rgba(255,240,200,0.45)'; }
+    ctx.stroke();
+    rr(x + g + 2, y + g + 2, tw - 4, tf - 4, r - 2); ctx.lineWidth = 0.6; ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.stroke();
     if (sel && game.canPlace(sel, cell, true)) {
       const repl = sel.kind === 'creature' && !!cell.c;
       ctx.save();
@@ -697,18 +726,24 @@ function drawBoard() {
       if (!hop) moving.pop()!();
       ctx.save(); ctx.translate(ox, oy - lift);
       if (cell.c.bonus > 0) {
-        diamond(x + 11, y + 11, 9, metal('gold', x + 2, y + 2, x + 20, y + 20) as any);
-        diamond(x + 11, y + 11, 7.2, '#7a4fa0');
-        text('+' + cell.c.bonus, x + 11, y + 11.5, 8, '#fff', 'center', true);
+        ctx.save(); ctx.shadowColor = 'rgba(20,8,4,0.5)'; ctx.shadowBlur = 3; ctx.shadowOffsetY = 1;
+        diamond(x + 12, y + 12, 9.5, metal('gold', x + 2, y + 2, x + 22, y + 22) as any);
+        ctx.restore();
+        diamond(x + 12, y + 12, 7.6, '#6a3f92');
+        text('+' + cell.c.bonus, x + 12, y + 12.5, 8.5, '#fff', 'center', true);
       }
       if (cell.c.last !== null) {
         const s = String(cell.c.last);
-        ctx.font = 'bold 10px ' + FONT;
-        const bw = Math.max(20, ctx.measureText(s).width + 10);
-        chamfer(x + CELL - bw - 3, y + CELL - 17, bw, 14, 4);
-        ctx.fillStyle = 'rgba(252,247,235,0.95)'; ctx.fill();
-        ctx.lineWidth = 0.8; ctx.strokeStyle = C.line; ctx.stroke();
-        text(s, x + CELL - 3 - bw / 2, y + CELL - 9.5, 10, C.crimson, 'center', true);
+        ctx.font = 'bold 11px ' + FONT;
+        const bw = Math.max(22, ctx.measureText(s).width + 12), bh = 15;
+        const bx = x + CELL - bw - 5, by = y + CELL - bh - 7;
+        ctx.save(); ctx.shadowColor = 'rgba(20,8,4,0.5)'; ctx.shadowBlur = 3; ctx.shadowOffsetY = 1;
+        rr(bx, by, bw, bh, bh / 2);
+        const pg = ctx.createLinearGradient(0, by, 0, by + bh); pg.addColorStop(0, '#4a3328'); pg.addColorStop(1, '#1d130e');
+        ctx.fillStyle = pg; ctx.fill();
+        ctx.restore();
+        rr(bx + 0.5, by + 0.5, bw - 1, bh - 1, bh / 2); ctx.lineWidth = 1; ctx.strokeStyle = metal('gold', bx, by, bx + bw, by + bh); ctx.stroke();
+        metalText(s, bx + bw / 2, by + bh / 2 + 0.5, 11, 'center', FONT);
       }
       ctx.restore();
     }
